@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, MapPin, Download, Plus, CheckCircle, Bell, Trash2 } from 'lucide-react';
+import { Clock, MapPin, Download, Plus, CheckCircle, Bell, Trash2 } from 'lucide-react';
 import { downloadNoticeIcs } from '../utils/icsExport';
 import { SAMPLE_REALISTIC_NOTICE } from '../data/mockNotices';
 
