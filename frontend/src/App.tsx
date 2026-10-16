@@ -4,8 +4,7 @@ import { HeroSection } from './components/HeroSection';
 import { ScrollWordReveal } from './components/ScrollWordReveal';
 import { ScrollCurvedJourney } from './components/ScrollCurvedJourney';
 import { RealisticNoticeSection } from './components/RealisticNoticeSection';
-import { SmartCalendarSection } from './components/SmartCalendarSection';
-import { ConflictDetectorSection } from './components/ConflictDetectorSection';
+import { TimelineCalendar } from './components/TimelineCalendar';
 import { TwoPortalsSection } from './components/TwoPortalsSection';
 import { TrustReliabilitySection } from './components/TrustReliabilitySection';
 import { FinalCtaSection } from './components/FinalCtaSection';
@@ -40,11 +39,8 @@ export function App() {
         {/* Section 4: Decode a Realistic Notice (Internal Test 2 + Review Screen) */}
         <RealisticNoticeSection />
 
-        {/* Section 6: Smart Calendar & Schedule Management */}
-        <SmartCalendarSection />
-
-        {/* Section 7: Conflict Detection (Full-Duration Overlap & Alternatives) */}
-        <ConflictDetectorSection />
+        {/* Primary Timeline Calendar (Replaces old calendar completely) */}
+        <TimelineCalendar />
 
         {/* Section 8: Two Portals (Student & Professor) */}
         <TwoPortalsSection />
