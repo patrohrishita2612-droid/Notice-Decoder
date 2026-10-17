@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Send, Upload, FileText, CheckCircle2, AlertTriangle, 
   Clock, ShieldAlert, Sparkles, X, Eye, ChevronRight
@@ -6,6 +6,7 @@ import {
 import { OfficialNotice, ConflictRequest, ExtractedNotice } from '../types';
 import { CalendarEvent } from './PersonalAcademicCalendar';
 import { NoticeProcessingSteps } from './NoticeProcessingSteps';
+import { useAuth } from '../context/AuthContext';
 
 interface ProfessorWorkspaceProps {
   officialNotices: OfficialNotice[];
@@ -33,21 +34,21 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
   onReviewConflict,
   onNavigateToCalendar
 }) => {
+  const { user } = useAuth();
   const [activeSection, setActiveSection] = useState<'publisher' | 'circulars' | 'conflicts'>('publisher');
 
   // Notice Publisher Form State
-  const [noticeTitle, setNoticeTitle] = useState('Conduct of Internal Assessment Test 2 (CSA)');
-  const [issuingDept, setIssuingDept] = useState('Department of Computer Engineering');
-  const [targetAudience, setTargetAudience] = useState('CS-302 CSA');
-  const [noticeText, setNoticeText] = useState(
-    `DEPARTMENT OF COMPUTER ENGINEERING\nCIRCULAR NO: CE/2026/NOV-14\n\nSubject: Conduct of Internal Assessment Test 2 (Offline Mode)\n\nAll third-year students (Batch 2024-2028) are hereby informed that Internal Test 2 for CSA (CS-302) is scheduled on 18 November 2026 from 10:00 AM to 11:30 AM in Examination Hall Room 204.\n\nStudents must submit their certified practical record books to the department office no later than 12:00 noon on the same day.`
-  );
+  const [noticeTitle, setNoticeTitle] = useState('');
+  const [issuingDept, setIssuingDept] = useState('');
+  const [targetAudience, setTargetAudience] = useState('All Students');
+  const [noticeText, setNoticeText] = useState('');
 
   // File Upload State
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFile, setUploadedFile] = useState<{ name: string; type: string; size: number } | null>(null);
   const [fileError, setFileError] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [extractedDraft, setExtractedDraft] = useState<ExtractedNotice & { isoDate: string } | null>(null);
+  const [extractedDraft, setExtractedDraft] = useState<ExtractedNotice & { isoDate?: string | null } | null>(null);
   const [toastMessage, setToastMessage] = useState('');
 
   // Conflict Review Modal State
@@ -92,84 +93,67 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
       type: file.type,
       size: file.size
     });
-
-    // Preset appropriate sample text depending on file name
-    if (file.name.toLowerCase().includes('exam') || file.name.toLowerCase().includes('test')) {
-      setNoticeTitle('Conduct of Internal Assessment Test 2 (CSA)');
-      setTargetAudience('CS-302 CSA');
-      setNoticeText(`DEPARTMENT OF COMPUTER ENGINEERING\nCIRCULAR REF: ${file.name}\n\nSubject: Conduct of Internal Assessment Test 2 (Offline Mode)\n\nAll third-year students (Batch 2024-2028) are hereby informed that Internal Test 2 for CSA (CS-302) is scheduled on 18 November 2026 from 10:00 AM to 11:30 AM in Examination Hall Room 204.\n\nStudents must submit their certified practical record books to the department office no later than 12:00 noon on the same day.`);
-    } else if (file.name.toLowerCase().includes('lecture') || file.name.toLowerCase().includes('guest')) {
-      setNoticeTitle('Tech-Innovate Series: Microservices Expert Lecture');
-      setTargetAudience('All Students');
-      setNoticeText(`INDUSTRY RELATIONS & ACADEMIC CELL\nDOCUMENT: ${file.name}\n\nGuest Lecture by Dr. A. Ramanujan (Senior Systems Architect, Google Cloud)\nDate: 14 November 2026\nTime: 09:30 AM to 10:30 AM\nVenue: Seminar Hall B (Block 1)\nAttendance is compulsory for CSE & IT students. Topic: Scalable Cloud Microservices.`);
-    }
-  };
-
-  // 1-Click Sample File Pre-sets
-  const handleLoadSample = (sampleType: 'pdf' | 'png' | 'text') => {
-    setFileError('');
-    if (sampleType === 'pdf') {
-      setUploadedFile({
-        name: 'CE_Internal_Assessment_Circular_2026.pdf',
-        type: 'application/pdf',
-        size: 384000
-      });
-      setNoticeTitle('Internal Assessment Test 2 (CSA)');
-      setTargetAudience('CS-302 CSA');
-      setNoticeText(`DEPARTMENT OF COMPUTER ENGINEERING\nCIRCULAR NO: CE/2026/NOV-14\n\nSubject: Conduct of Internal Assessment Test 2 (Offline Mode)\n\nAll third-year students (Batch 2024-2028) are hereby informed that Internal Test 2 for CSA (CS-302) is scheduled on 18 November 2026 from 10:00 AM to 11:30 AM in Examination Hall Room 204.\n\nStudents must submit their certified practical record books to the department office no later than 12:00 noon on the same day.`);
-    } else if (sampleType === 'png') {
-      setUploadedFile({
-        name: 'GoogleCloud_Microservices_Workshop_Flyer.png',
-        type: 'image/png',
-        size: 614000
-      });
-      setNoticeTitle('Tech-Innovate: Scalable Cloud Architecture');
-      setTargetAudience('All Students');
-      setNoticeText(`TECH-INNOVATE SERIES 2026\nDate: 14 November 2026\nSpeaker: Dr. A. Ramanujan (Senior Systems Architect, Google Cloud)\nTime: 09:30 AM to 10:30 AM\nVenue: Seminar Hall B (Block 1)\nAttendance is compulsory for CSE & IT students. Topic: Scalable Cloud Microservices.`);
-    } else {
-      setUploadedFile(null);
-      setNoticeTitle('Capstone Project Phase 1 Evaluation');
-      setTargetAudience('All Students');
-      setNoticeText(`CAPSTONE PROJECT COMMITTEE\nNotice Ref: CPC/2026/PH1-EVAL\nAll final-year project teams are notified that Project Phase 1 Evaluation is scheduled for Friday, 14 November 2026 from 11:30 AM to 12:30 PM in Project Lab 3. Presentation slides and GitHub repository links must be submitted before 09:00 AM.`);
-    }
   };
 
   // Start parsing with 4-step progressive line animation
   const handleStartParsing = () => {
-    if (!noticeText.trim()) {
+    const trimmed = noticeText.trim();
+    if (!trimmed && !uploadedFile) {
       setFileError('Please provide notice text or upload a circular file.');
       return;
     }
+    
+    // Check if input is meaningless or too short
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    const hasRepeatedCharsOnly = /^([a-zA-Z0-9])\1+$/i.test(trimmed);
+    if (trimmed && (trimmed.length < 15 || words.length < 3 || hasRepeatedCharsOnly)) {
+      setFileError('Not enough information to extract a notice. Please upload a valid notice or enter more details.');
+      return;
+    }
+
     setFileError('');
     setIsProcessing(true);
   };
 
   // Called when NoticeProcessingSteps finishes
   const handleParsingComplete = () => {
-    const lower = noticeText.toLowerCase();
-    let title = noticeTitle || 'Official Campus Notice';
-    let startTime = '10:00';
-    let endTime = '11:30';
-    let venue = 'Room 204';
-    let deadline = 'Same Day, 12:00 Noon';
-    let deadlineAction = 'Submit certified practical record books to department office';
-    let summary = 'Assessment and departmental submissions scheduled for student cohort.';
+    const trimmed = noticeText.trim();
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    const hasRepeatedCharsOnly = /^([a-zA-Z0-9])\1+$/i.test(trimmed);
+
+    if (trimmed && (trimmed.length < 15 || words.length < 3 || hasRepeatedCharsOnly)) {
+      setIsProcessing(false);
+      setFileError('Not enough information to extract a notice. Please upload a valid notice or enter more details.');
+      return;
+    }
+
+    const lower = trimmed.toLowerCase();
+    let title: string | null = noticeTitle.trim() || null;
+    let startTime: string | null = null;
+    let endTime: string | null = null;
+    let venue: string | null = null;
+    let deadline: string | null = null;
+    let deadlineAction: string | null = null;
+    let summary: string = trimmed || 'Circular uploaded for departmental review.';
     let category: 'Examination' | 'Academic' | 'Guest Lecture' | 'Administrative' = 'Academic';
-    let urgency: 'high' | 'medium' | 'normal' = 'high';
-    let isoDate = '2026-11-18';
-    let humanDate = '18 November 2026';
+    let urgency: 'high' | 'medium' | 'normal' = 'normal';
+    let isoDate: string | null = null;
+    let humanDate: string | null = null;
 
     if (lower.includes('internal test') || lower.includes('csa') || lower.includes('assessment')) {
-      title = 'Internal Test 2 (CSA)';
+      title = title || 'Internal Test 2 (CSA)';
       startTime = '10:00';
       endTime = '11:30';
       venue = 'Room 204';
       category = 'Examination';
       isoDate = '2026-11-18';
       humanDate = '18 November 2026';
+      deadline = '18 November 2026, 12:00';
+      deadlineAction = 'Submit certified practical record books to department office';
       summary = 'Internal Test 2 scheduled for 10:00–11:30 AM in Room 204. Mandatory practical records due by 12:00 noon.';
+      urgency = 'high';
     } else if (lower.includes('ramanujan') || lower.includes('microservices') || lower.includes('guest lecture')) {
-      title = 'Guest Lecture: Microservices';
+      title = title || 'Guest Lecture: Microservices';
       startTime = '09:30';
       endTime = '10:30';
       venue = 'Seminar Hall B';
@@ -178,7 +162,7 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
       humanDate = '14 November 2026';
       summary = 'Dr. Ramanujan expert lecture on distributed microservices. Compulsory attendance for CSE & IT students.';
     } else if (lower.includes('phase 1') || lower.includes('capstone')) {
-      title = 'Project Phase 1 Review';
+      title = title || 'Project Phase 1 Review';
       startTime = '11:30';
       endTime = '12:30';
       venue = 'Project Lab 3';
@@ -186,6 +170,26 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
       isoDate = '2026-11-14';
       humanDate = '14 November 2026';
       summary = 'Final year capstone phase 1 evaluation. Review with faculty committee in Project Lab 3.';
+    } else {
+      // Heuristic extraction for date
+      const dateMatch = trimmed.match(/(\d{4}-\d{2}-\d{2})|(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i);
+      if (dateMatch) {
+        humanDate = dateMatch[0];
+        isoDate = dateMatch[1] || null;
+      }
+      
+      const timeMatch = trimmed.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*(?:-|to)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+      if (timeMatch) {
+        startTime = timeMatch[1];
+        endTime = timeMatch[2];
+      }
+
+      const venueMatch = trimmed.match(/(?:at|venue|room|hall|lab)[:\s]+([A-Za-z0-9\s\-]+?)(?=[,\.\n]|$)/i);
+      if (venueMatch) {
+        venue = venueMatch[1].trim();
+      }
+
+      title = title || (words.slice(0, 5).join(' ') || 'Official Notice');
     }
 
     setExtractedDraft({
@@ -220,17 +224,17 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
 
     const newNotice: OfficialNotice = {
       id: `notice-pub-${Date.now()}`,
-      title: extractedDraft.title,
+      title: extractedDraft.title || 'Official Campus Circular',
       originalText: extractedDraft.rawText,
       summary: extractedDraft.summary,
-      date: extractedDraft.isoDate,
-      time: `${extractedDraft.startTime} - ${extractedDraft.endTime}`,
-      venue: extractedDraft.venue,
+      date: extractedDraft.isoDate || extractedDraft.date || null,
+      time: (extractedDraft.startTime && extractedDraft.endTime) ? `${extractedDraft.startTime} - ${extractedDraft.endTime}` : (extractedDraft.startTime || null),
+      venue: extractedDraft.venue || null,
       targetAudience: targetAudience,
-      requiredAction: extractedDraft.deadlineAction,
-      issuingDepartment: issuingDept,
-      authorId: 'user-default-prof',
-      publishedBy: 'Dr. Evelyn Reed (Head of Department)',
+      requiredAction: extractedDraft.deadlineAction || null,
+      issuingDepartment: issuingDept || (user?.department || 'Academic Department'),
+      authorId: user?.id || 'prof-current',
+      publishedBy: user?.name ? `${user.name} (${user.department || 'Faculty'})` : 'Faculty / Administrator',
       status: 'published',
       fileName: uploadedFile?.name,
       fileType: uploadedFile?.type,
@@ -238,21 +242,24 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
       createdAt: new Date().toISOString()
     };
 
-    // Corresponding Official Calendar Event (Locked for students!)
-    const officialEvent: CalendarEvent = {
-      id: `ev-official-${Date.now()}`,
-      title: extractedDraft.title,
-      date: extractedDraft.isoDate,
-      startTime: extractedDraft.startTime,
-      endTime: extractedDraft.endTime,
-      venue: extractedDraft.venue,
-      description: extractedDraft.summary,
-      category: extractedDraft.category as any,
-      color: extractedDraft.category === 'Examination' ? 'rose' : extractedDraft.category === 'Guest Lecture' ? 'forest' : 'blue',
-      isOfficial: true,
-      publishedBy: 'Dr. Evelyn Reed (Head of Department)',
-      targetAudience: targetAudience
-    };
+    // Corresponding Official Calendar Event (Only created if a verified date exists!)
+    let officialEvent: CalendarEvent | undefined = undefined;
+    if (extractedDraft.isoDate) {
+      officialEvent = {
+        id: `ev-official-${Date.now()}`,
+        title: extractedDraft.title || 'Official Notice Event',
+        date: extractedDraft.isoDate,
+        startTime: extractedDraft.startTime || '09:00',
+        endTime: extractedDraft.endTime || '10:00',
+        venue: extractedDraft.venue || 'Campus',
+        description: extractedDraft.summary,
+        category: extractedDraft.category as any,
+        color: extractedDraft.category === 'Examination' ? 'rose' : extractedDraft.category === 'Guest Lecture' ? 'forest' : 'blue',
+        isOfficial: true,
+        publishedBy: user?.name || 'Faculty / Department',
+        targetAudience: targetAudience
+      };
+    }
 
     onPublishNotice(newNotice, officialEvent);
     setToastMessage(`Published official circular "${newNotice.title}" and broadcast to ${targetAudience}!`);
@@ -269,7 +276,8 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
     setReviewingConflict(conflict);
     setReviewAction('accept');
     setProfessorNote(`Rescheduled ${conflict.eventTitle} to accommodate ${conflict.conflictingCommitmentTitle}.`);
-    setNewSlotDate(conflict.suggestedDate || '2026-11-13');
+    const todayStr = new Date().toISOString().split('T')[0];
+    setNewSlotDate(conflict.suggestedDate || todayStr);
     setNewSlotStart('11:00');
     setNewSlotEnd('12:00');
   };
@@ -383,25 +391,16 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
                 Official Circular Upload & Form
               </span>
               
-              {/* Sample Document Fast Fill */}
-              <div className="flex items-center gap-1.5 text-[11px] font-mono">
-                <span className="text-[#172B4D]/50 hidden sm:inline">1-Click Sample:</span>
-                <button
-                  type="button"
-                  onClick={() => handleLoadSample('pdf')}
-                  className="px-2 py-0.5 rounded bg-[#F7F4E9] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#E2DDD0] cursor-pointer"
-                >
-                  Exam PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleLoadSample('png')}
-                  className="px-2 py-0.5 rounded bg-[#F7F4E9] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#E2DDD0] cursor-pointer"
-                >
-                  Flyer PNG
-                </button>
-              </div>
             </div>
+
+            {/* Hidden native file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={handleFileChange}
+              className="hidden"
+            />
 
             {/* Drag & Drop File Upload Area */}
             <div
@@ -428,30 +427,47 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
                       </span>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setUploadedFile(null)}
-                    className="p-1 rounded text-[#D9574F] hover:bg-[#FFF0F0] cursor-pointer shrink-0"
-                    title="Remove file"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-2 py-1 text-[11px] font-mono text-[#172B4D] hover:bg-[#F7F4E9] rounded border border-[#E2DDD0] cursor-pointer"
+                      title="Replace file"
+                    >
+                      Replace
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUploadedFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                      className="p-1 rounded text-[#D9574F] hover:bg-[#FFF0F0] cursor-pointer"
+                      title="Remove file"
+                      aria-label="Remove uploaded file"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <>
-                  <div className="w-10 h-10 rounded-xl bg-[#F7F4E9] border border-[#E2DDD0] flex items-center justify-center text-[#172B4D]">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Upload circular file"
+                    className="w-12 h-12 rounded-xl bg-[#F7F4E9] border border-[#E2DDD0] flex items-center justify-center text-[#172B4D] hover:scale-105 active:scale-95 transition-transform cursor-pointer hover:border-[#D9A928] focus:outline-none focus:ring-2 focus:ring-[#D9A928]"
+                  >
                     <Upload className="w-5 h-5 text-[#D9A928]" />
-                  </div>
+                  </button>
                   <div>
-                    <label className="text-xs font-mono font-semibold text-[#172B4D] hover:underline cursor-pointer">
-                      <span>Click to upload circular</span>
-                      <input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={handleFileChange}
-                        className="hidden"
-                      />
-                    </label>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-xs font-mono font-semibold text-[#172B4D] hover:underline cursor-pointer focus:outline-none"
+                    >
+                      Click to upload circular
+                    </button>
                     <span className="text-xs font-mono text-[#172B4D]/60"> or drag & drop</span>
                   </div>
                   <span className="text-[10px] font-mono text-[#172B4D]/50">
@@ -575,15 +591,23 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
                   <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-[#FFFDF7] border border-[#E2DDD0]">
                     <div>
                       <span className="text-[10px] text-[#172B4D]/50 block">DATE</span>
-                      <span className="font-bold">{extractedDraft.isoDate}</span>
+                      <span className={`font-bold ${extractedDraft.isoDate || extractedDraft.date ? 'text-[#172B4D]' : 'text-[#D9574F]'}`}>
+                        {extractedDraft.isoDate || extractedDraft.date || 'Not specified'}
+                      </span>
                     </div>
                     <div>
                       <span className="text-[10px] text-[#172B4D]/50 block">TIME</span>
-                      <span className="font-bold">{extractedDraft.startTime} – {extractedDraft.endTime}</span>
+                      <span className={`font-bold ${extractedDraft.startTime ? 'text-[#172B4D]' : 'text-[#172B4D]/60'}`}>
+                        {extractedDraft.startTime && extractedDraft.endTime 
+                          ? `${extractedDraft.startTime} – ${extractedDraft.endTime}` 
+                          : (extractedDraft.startTime || 'Not specified')}
+                      </span>
                     </div>
                     <div>
                       <span className="text-[10px] text-[#172B4D]/50 block">VENUE</span>
-                      <span className="font-bold truncate">{extractedDraft.venue}</span>
+                      <span className={`font-bold truncate ${extractedDraft.venue ? 'text-[#172B4D]' : 'text-[#172B4D]/60'}`}>
+                        {extractedDraft.venue || 'Not specified'}
+                      </span>
                     </div>
                     <div>
                       <span className="text-[10px] text-[#172B4D]/50 block">TARGET</span>
@@ -594,7 +618,9 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
                   <div className="p-3 rounded-xl bg-[#FFF8E6] border border-[#EED17D] text-[11px] text-[#172B4D] space-y-1">
                     <span className="font-bold block">Integrity Protection:</span>
                     <p className="text-[#172B4D]/80 leading-relaxed">
-                      Publishing will lock this session on student calendars (`isOfficial: true`). Students cannot reschedule or delete it directly, only request adjustments via conflict requests.
+                      {extractedDraft.isoDate 
+                        ? 'Publishing will lock this session on student calendars (`isOfficial: true`). Students cannot reschedule or delete it directly, only request adjustments via conflict requests.'
+                        : 'Notice contains no verified event date. It will be published as an informational circular without adding an event to student calendars.'}
                     </p>
                   </div>
 
@@ -639,76 +665,98 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
       {/* ============================================================ */}
       {activeSection === 'circulars' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {officialNotices.map((notice) => (
-              <div
-                key={notice.id}
-                className="bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-5 shadow-xs flex flex-col justify-between gap-4"
-              >
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
-                      notice.status === 'published'
-                        ? 'bg-[#F0FDF4] text-[#15803D] border border-[#86EFAC]'
-                        : notice.status === 'withdrawn'
-                        ? 'bg-[#FFF0F0] text-[#D9574F] border border-[#FCA5A5]'
-                        : 'bg-[#FFF8E6] text-[#D9A928] border border-[#EED17D]'
-                    }`}>
-                      {notice.status}
-                    </span>
-                    <span className="text-[11px] font-mono text-[#172B4D]/60 bg-[#F7F4E9] px-2 py-0.5 rounded">
-                      {notice.targetAudience}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h3 className="font-serif font-bold text-base text-[#172B4D]">
-                      {notice.title}
-                    </h3>
-                    <p className="text-[11px] font-mono text-[#172B4D]/60 mt-0.5">
-                      {notice.date} · {notice.time}
-                    </p>
-                  </div>
-
-                  <p className="text-xs font-sans text-[#172B4D]/80 line-clamp-3 bg-[#F7F4E9]/50 p-2.5 rounded-xl border border-[#E2DDD0]/80">
-                    {notice.summary}
-                  </p>
-
-                  {notice.fileName && (
-                    <div className="text-[10px] font-mono text-[#172B4D]/70 flex items-center gap-1.5 truncate">
-                      <FileText className="w-3.5 h-3.5 text-[#D9A928] shrink-0" />
-                      <span className="truncate">{notice.fileName}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Status Action Buttons */}
-                <div className="pt-3 border-t border-[#E2DDD0] flex items-center justify-between text-xs font-mono">
-                  {notice.status === 'published' ? (
-                    <button
-                      type="button"
-                      onClick={() => onUpdateNoticeStatus(notice.id, 'withdrawn')}
-                      className="px-3 py-1.5 rounded-lg bg-[#FFF0F0] hover:bg-[#FEE2E2] text-[#D9574F] border border-[#FCA5A5] cursor-pointer"
-                    >
-                      Withdraw Notice
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onUpdateNoticeStatus(notice.id, 'published')}
-                      className="px-3 py-1.5 rounded-lg bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] cursor-pointer"
-                    >
-                      Republish Notice
-                    </button>
-                  )}
-
-                  <span className="text-[10px] text-[#172B4D]/50">
-                    {new Date(notice.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
+          {officialNotices.length === 0 ? (
+            <div className="bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-10 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-[#D9A928] mx-auto flex items-center justify-center">
+                <FileText className="w-6 h-6" />
               </div>
-            ))}
-          </div>
+              <div className="space-y-1">
+                <h4 className="font-serif font-bold text-base text-[#172B4D]">No Circulars Published Yet</h4>
+                <p className="text-xs font-mono text-[#172B4D]/60 max-w-md mx-auto">
+                  Official notices published here will be broadcast to students and synchronized directly onto their personal academic calendars.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveSection('publisher')}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#172B4D] text-[#FFFDF7] text-xs font-mono font-medium hover:bg-[#244270] transition-colors cursor-pointer"
+              >
+                <span>Draft First Circular</span>
+                <ChevronRight className="w-3.5 h-3.5 text-[#D9A928]" />
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {officialNotices.map((notice) => (
+                <div
+                  key={notice.id}
+                  className="bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-5 shadow-xs flex flex-col justify-between gap-4"
+                >
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
+                        notice.status === 'published'
+                          ? 'bg-[#F0FDF4] text-[#15803D] border border-[#86EFAC]'
+                          : notice.status === 'withdrawn'
+                          ? 'bg-[#FFF0F0] text-[#D9574F] border border-[#FCA5A5]'
+                          : 'bg-[#FFF8E6] text-[#D9A928] border border-[#EED17D]'
+                      }`}>
+                        {notice.status}
+                      </span>
+                      <span className="text-[11px] font-mono text-[#172B4D]/60 bg-[#F7F4E9] px-2 py-0.5 rounded">
+                        {notice.targetAudience}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h3 className="font-serif font-bold text-base text-[#172B4D]">
+                        {notice.title}
+                      </h3>
+                      <p className="text-[11px] font-mono text-[#172B4D]/60 mt-0.5">
+                        {notice.date} · {notice.time}
+                      </p>
+                    </div>
+
+                    <p className="text-xs font-sans text-[#172B4D]/80 line-clamp-3 bg-[#F7F4E9]/50 p-2.5 rounded-xl border border-[#E2DDD0]/80">
+                      {notice.summary}
+                    </p>
+
+                    {notice.fileName && (
+                      <div className="text-[10px] font-mono text-[#172B4D]/70 flex items-center gap-1.5 truncate">
+                        <FileText className="w-3.5 h-3.5 text-[#D9A928] shrink-0" />
+                        <span className="truncate">{notice.fileName}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Status Action Buttons */}
+                  <div className="pt-3 border-t border-[#E2DDD0] flex items-center justify-between text-xs font-mono">
+                    {notice.status === 'published' ? (
+                      <button
+                        type="button"
+                        onClick={() => onUpdateNoticeStatus(notice.id, 'withdrawn')}
+                        className="px-3 py-1.5 rounded-lg bg-[#FFF0F0] hover:bg-[#FEE2E2] text-[#D9574F] border border-[#FCA5A5] cursor-pointer"
+                      >
+                        Withdraw Notice
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onUpdateNoticeStatus(notice.id, 'published')}
+                        className="px-3 py-1.5 rounded-lg bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] cursor-pointer"
+                      >
+                        Republish Notice
+                      </button>
+                    )}
+
+                    <span className="text-[10px] text-[#172B4D]/50">
+                      {new Date(notice.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -718,8 +766,16 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
       {activeSection === 'conflicts' && (
         <div className="space-y-4">
           {conflictRequests.length === 0 ? (
-            <div className="bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-8 text-center text-xs font-mono text-[#172B4D]/60">
-              No schedule conflicts filed by students. All official sessions are clear!
+            <div className="bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-10 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-[#15803D] mx-auto flex items-center justify-center">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-serif font-bold text-base text-[#172B4D]">No Pending Schedule Conflicts</h4>
+                <p className="text-xs font-mono text-[#172B4D]/60 max-w-md mx-auto">
+                  No student conflict petitions have been submitted. All official sessions and timetables are conflict-free.
+                </p>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

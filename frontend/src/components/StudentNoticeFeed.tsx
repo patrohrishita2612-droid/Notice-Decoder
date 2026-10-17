@@ -13,6 +13,7 @@ interface StudentNoticeFeedProps {
   onMarkNotificationRead: (id: string) => void;
   onMarkAllNotificationsRead: () => void;
   onNavigateToCalendarDate: (date: string) => void;
+  onNavigateToDecodeNotice?: () => void;
 }
 
 export const StudentNoticeFeed: React.FC<StudentNoticeFeedProps> = ({
@@ -20,7 +21,8 @@ export const StudentNoticeFeed: React.FC<StudentNoticeFeedProps> = ({
   notifications,
   onMarkNotificationRead,
   onMarkAllNotificationsRead,
-  onNavigateToCalendarDate
+  onNavigateToCalendarDate,
+  onNavigateToDecodeNotice
 }) => {
   const [filterType, setFilterType] = useState<'all' | 'notices' | 'alerts'>('all');
   const [selectedNoticeForDetail, setSelectedNoticeForDetail] = useState<OfficialNotice | null>(null);
@@ -100,73 +102,87 @@ export const StudentNoticeFeed: React.FC<StudentNoticeFeedProps> = ({
       </div>
 
       {/* 2. In-App Notifications Carousel / Banner List */}
-      {(filterType === 'all' || filterType === 'alerts') && notifications.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <span className="font-mono text-xs font-bold uppercase tracking-wider text-[#172B4D]/70 flex items-center gap-2">
-              <Bell className="w-3.5 h-3.5 text-[#D9A928]" />
-              Recent In-App Alerts ({notifications.length})
-            </span>
-          </div>
+      {(filterType === 'all' || filterType === 'alerts') && (
+        notifications.length > 0 ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <span className="font-mono text-xs font-bold uppercase tracking-wider text-[#172B4D]/70 flex items-center gap-2">
+                <Bell className="w-3.5 h-3.5 text-[#D9A928]" />
+                Recent In-App Alerts ({notifications.length})
+              </span>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {notifications.map((notif) => (
-              <div
-                key={notif.id}
-                className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
-                  !notif.isRead
-                    ? 'bg-[#FFFDF7] border-l-4 border-l-[#D9A928] border-r border-t border-b border-[#E2DDD0] shadow-2xs'
-                    : 'bg-[#F7F4E9]/50 border-[#E2DDD0] opacity-80'
-                }`}
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
-                      notif.type === 'conflict_accepted'
-                        ? 'bg-[#F0FDF4] text-[#15803D] border border-[#86EFAC]'
-                        : notif.type === 'conflict_rejected'
-                        ? 'bg-[#FFF0F0] text-[#D9574F] border border-[#FCA5A5]'
-                        : 'bg-[#172B4D] text-[#D9A928]'
-                    }`}>
-                      {notif.type.replace('_', ' ')}
-                    </span>
-                    <span className="text-[10px] font-mono text-[#172B4D]/50">
-                      {new Date(notif.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {notifications.map((notif) => (
+                <div
+                  key={notif.id}
+                  className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                    !notif.isRead
+                      ? 'bg-[#FFFDF7] border-l-4 border-l-[#D9A928] border-r border-t border-b border-[#E2DDD0] shadow-2xs'
+                      : 'bg-[#F7F4E9]/50 border-[#E2DDD0] opacity-80'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
+                        notif.type === 'conflict_accepted'
+                          ? 'bg-[#F0FDF4] text-[#15803D] border border-[#86EFAC]'
+                          : notif.type === 'conflict_rejected'
+                          ? 'bg-[#FFF0F0] text-[#D9574F] border border-[#FCA5A5]'
+                          : 'bg-[#172B4D] text-[#D9A928]'
+                      }`}>
+                        {notif.type.replace('_', ' ')}
+                      </span>
+                      <span className="text-[10px] font-mono text-[#172B4D]/50">
+                        {new Date(notif.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    <h4 className="font-serif font-bold text-sm text-[#172B4D] pt-1">
+                      {notif.title}
+                    </h4>
+                    <p className="text-xs font-mono text-[#172B4D]/80 leading-relaxed">
+                      {notif.message}
+                    </p>
                   </div>
 
-                  <h4 className="font-serif font-bold text-sm text-[#172B4D] pt-1">
-                    {notif.title}
-                  </h4>
-                  <p className="text-xs font-mono text-[#172B4D]/80 leading-relaxed">
-                    {notif.message}
-                  </p>
-                </div>
+                  <div className="pt-2 border-t border-[#E2DDD0]/80 flex items-center justify-between text-xs font-mono">
+                    {!notif.isRead ? (
+                      <button
+                        type="button"
+                        onClick={() => onMarkNotificationRead(notif.id)}
+                        className="text-[#D9A928] hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Mark as read</span>
+                      </button>
+                    ) : (
+                      <span className="text-[#172B4D]/40 text-[11px]">Read</span>
+                    )}
 
-                <div className="pt-2 border-t border-[#E2DDD0]/80 flex items-center justify-between text-xs font-mono">
-                  {!notif.isRead ? (
-                    <button
-                      type="button"
-                      onClick={() => onMarkNotificationRead(notif.id)}
-                      className="text-[#D9A928] hover:underline cursor-pointer flex items-center gap-1"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Mark as read</span>
-                    </button>
-                  ) : (
-                    <span className="text-[#172B4D]/40 text-[11px]">Read</span>
-                  )}
-
-                  {notif.targetAudience && (
-                    <span className="text-[10px] text-[#172B4D]/60 bg-[#E2DDD0]/40 px-2 py-0.5 rounded">
-                      {notif.targetAudience}
-                    </span>
-                  )}
+                    {notif.targetAudience && (
+                      <span className="text-[10px] text-[#172B4D]/60 bg-[#E2DDD0]/40 px-2 py-0.5 rounded">
+                        {notif.targetAudience}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        ) : filterType === 'alerts' ? (
+          <div className="bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-10 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-[#F0FDF4] border border-[#86EFAC] text-[#15803D] mx-auto flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-serif font-bold text-base text-[#172B4D]">You're all caught up</h4>
+              <p className="text-xs font-mono text-[#172B4D]/60 max-w-md mx-auto">
+                No unread academic circulars, timetable alerts, or schedule conflict responses at this moment.
+              </p>
+            </div>
+          </div>
+        ) : null
       )}
 
       {/* 3. Official Campus Circulars Grid */}
@@ -179,92 +195,119 @@ export const StudentNoticeFeed: React.FC<StudentNoticeFeedProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {notices.map((notice) => (
-              <div
-                key={notice.id}
-                className="bg-[#FFFDF7] border border-[#E2DDD0] hover:border-[#172B4D]/40 rounded-2xl p-5 shadow-xs transition-all flex flex-col justify-between gap-4 group"
-              >
-                <div className="space-y-2.5">
-                  {/* Status & Audience Badge */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#172B4D] text-[#FFFDF7] text-[10px] font-mono font-bold tracking-wider uppercase">
-                      <ShieldCheck className="w-3 h-3 text-[#D9A928]" />
-                      Official Circular
-                    </span>
-                    <span className="text-[11px] font-mono font-medium text-[#172B4D]/70 bg-[#F7F4E9] px-2 py-0.5 rounded-lg border border-[#E2DDD0]">
-                      {notice.targetAudience}
-                    </span>
-                  </div>
-
-                  {/* Title & Department */}
-                  <div>
-                    <h3 className="font-serif font-bold text-base md:text-lg text-[#172B4D] group-hover:text-[#244270] transition-colors leading-snug">
-                      {notice.title}
-                    </h3>
-                    <p className="text-[11px] font-mono text-[#172B4D]/60 mt-0.5">
-                      {notice.issuingDepartment} · {notice.publishedBy}
-                    </p>
-                  </div>
-
-                  {/* Summary */}
-                  <p className="text-xs font-sans text-[#172B4D]/80 leading-relaxed bg-[#F7F4E9]/60 p-3 rounded-xl border border-[#E2DDD0]/80">
-                    {notice.summary}
-                  </p>
-
-                  {/* Schedule Details */}
-                  <div className="grid grid-cols-2 gap-2 text-xs font-mono text-[#172B4D]/80 pt-1">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-[#D9A928]" />
-                      <span>{notice.date}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-[#D9A928]" />
-                      <span>{notice.time}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 col-span-2">
-                      <MapPin className="w-3.5 h-3.5 text-[#D9A928]" />
-                      <span className="truncate">{notice.venue}</span>
-                    </div>
-                  </div>
-
-                  {/* File Attachment Badge (if uploaded from PDF or image) */}
-                  {notice.fileName && (
-                    <div className="flex items-center gap-2 p-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[11px] font-mono text-[#172B4D]">
-                      <FileText className="w-3.5 h-3.5 text-[#D9A928] shrink-0" />
-                      <span className="truncate font-medium">{notice.fileName}</span>
-                      {notice.fileSize && (
-                        <span className="text-[10px] text-[#172B4D]/50 ml-auto shrink-0">
-                          {(notice.fileSize / 1024).toFixed(0)} KB
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="pt-3 border-t border-[#E2DDD0] flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedNoticeForDetail(notice)}
-                    className="px-3 py-1.5 rounded-lg bg-[#F7F4E9] hover:bg-[#E2DDD0]/50 border border-[#E2DDD0] text-xs font-mono text-[#172B4D] transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    <span>Full Text</span>
-                    <ExternalLink className="w-3 h-3 text-[#172B4D]/60" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => onNavigateToCalendarDate(notice.date)}
-                    className="px-3.5 py-1.5 rounded-lg bg-[#172B4D] hover:bg-[#244270] text-[#FFFDF7] text-xs font-mono font-medium transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
-                  >
-                    <span>View Calendar</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-[#D9A928]" />
-                  </button>
-                </div>
+          {notices.length === 0 ? (
+            <div className="bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-10 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-[#D9A928] mx-auto flex items-center justify-center">
+                <FileText className="w-6 h-6" />
               </div>
-            ))}
-          </div>
+              <div className="space-y-1">
+                <h4 className="font-serif font-bold text-base text-[#172B4D]">No notices yet</h4>
+                <p className="text-xs font-mono text-[#172B4D]/60 max-w-md mx-auto">
+                  There are no official campus circulars published at the moment. You can decode a circular file or text anytime.
+                </p>
+              </div>
+              {onNavigateToDecodeNotice && (
+                <button
+                  type="button"
+                  onClick={onNavigateToDecodeNotice}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#172B4D] text-[#FFFDF7] text-xs font-mono font-medium hover:bg-[#244270] transition-colors cursor-pointer"
+                >
+                  <span>Decode Circular</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-[#D9A928]" />
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {notices.map((notice) => (
+                <div
+                  key={notice.id}
+                  className="bg-[#FFFDF7] border border-[#E2DDD0] hover:border-[#172B4D]/40 rounded-2xl p-5 shadow-xs transition-all flex flex-col justify-between gap-4 group"
+                >
+                  <div className="space-y-2.5">
+                    {/* Status & Audience Badge */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#172B4D] text-[#FFFDF7] text-[10px] font-mono font-bold tracking-wider uppercase">
+                        <ShieldCheck className="w-3 h-3 text-[#D9A928]" />
+                        Official Circular
+                      </span>
+                      <span className="text-[11px] font-mono font-medium text-[#172B4D]/70 bg-[#F7F4E9] px-2 py-0.5 rounded-lg border border-[#E2DDD0]">
+                        {notice.targetAudience}
+                      </span>
+                    </div>
+
+                    {/* Title & Department */}
+                    <div>
+                      <h3 className="font-serif font-bold text-base md:text-lg text-[#172B4D] group-hover:text-[#244270] transition-colors leading-snug">
+                        {notice.title}
+                      </h3>
+                      <p className="text-[11px] font-mono text-[#172B4D]/60 mt-0.5">
+                        {notice.issuingDepartment} · {notice.publishedBy}
+                      </p>
+                    </div>
+
+                    {/* Summary */}
+                    <p className="text-xs font-sans text-[#172B4D]/80 leading-relaxed bg-[#F7F4E9]/60 p-3 rounded-xl border border-[#E2DDD0]/80">
+                      {notice.summary}
+                    </p>
+
+                    {/* Schedule Details */}
+                    <div className="grid grid-cols-2 gap-2 text-xs font-mono text-[#172B4D]/80 pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-[#D9A928]" />
+                        <span>{notice.date}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#D9A928]" />
+                        <span>{notice.time}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 col-span-2">
+                        <MapPin className="w-3.5 h-3.5 text-[#D9A928]" />
+                        <span className="truncate">{notice.venue}</span>
+                      </div>
+                    </div>
+
+                    {/* File Attachment Badge (if uploaded from PDF or image) */}
+                    {notice.fileName && (
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[11px] font-mono text-[#172B4D]">
+                        <FileText className="w-3.5 h-3.5 text-[#D9A928] shrink-0" />
+                        <span className="truncate font-medium">{notice.fileName}</span>
+                        {notice.fileSize && (
+                          <span className="text-[10px] text-[#172B4D]/50 ml-auto shrink-0">
+                            {(notice.fileSize / 1024).toFixed(0)} KB
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="pt-3 border-t border-[#E2DDD0] flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedNoticeForDetail(notice)}
+                      className="px-3 py-1.5 rounded-lg bg-[#F7F4E9] hover:bg-[#E2DDD0]/50 border border-[#E2DDD0] text-xs font-mono text-[#172B4D] transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <span>Full Text</span>
+                      <ExternalLink className="w-3 h-3 text-[#172B4D]/60" />
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={!notice.date}
+                      onClick={() => {
+                        if (notice.date) onNavigateToCalendarDate(notice.date);
+                      }}
+                      className="px-3.5 py-1.5 rounded-lg bg-[#172B4D] hover:bg-[#244270] disabled:opacity-40 text-[#FFFDF7] text-xs font-mono font-medium transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>View Calendar</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-[#D9A928]" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -333,43 +376,52 @@ export const StudentNoticeFeed: React.FC<StudentNoticeFeedProps> = ({
             </div>
 
             <div className="p-4 border-t border-[#E2DDD0] bg-[#F7F4E9]/50 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => {
-                  downloadNoticeIcs({
-                    id: selectedNoticeForDetail.id,
-                    title: selectedNoticeForDetail.title,
-                    date: selectedNoticeForDetail.date,
-                    startTime: selectedNoticeForDetail.time.split(' - ')[0] || '10:00',
-                    endTime: selectedNoticeForDetail.time.split(' - ')[1] || '11:30',
-                    venue: selectedNoticeForDetail.venue,
-                    summary: selectedNoticeForDetail.summary,
-                    deadline: selectedNoticeForDetail.requiredAction || '',
-                    category: 'Academic',
-                    rawText: selectedNoticeForDetail.originalText,
-                    deadlineAction: '',
-                    audience: selectedNoticeForDetail.targetAudience,
-                    urgency: 'high'
-                  });
-                }}
-                className="px-3.5 py-2 rounded-xl bg-[#FFFDF7] border border-[#E2DDD0] text-xs font-mono text-[#172B4D] hover:bg-[#F7F4E9] flex items-center gap-1.5 cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-[#D9A928]" />
-                <span>Export .ics Calendar File</span>
-              </button>
+              {selectedNoticeForDetail.date ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const timeParts = (selectedNoticeForDetail.time || '').split(' - ');
+                    downloadNoticeIcs({
+                      id: selectedNoticeForDetail.id,
+                      title: selectedNoticeForDetail.title,
+                      date: selectedNoticeForDetail.date,
+                      startTime: timeParts[0] || '10:00',
+                      endTime: timeParts[1] || '11:30',
+                      venue: selectedNoticeForDetail.venue,
+                      summary: selectedNoticeForDetail.summary,
+                      deadline: selectedNoticeForDetail.requiredAction || '',
+                      category: 'Academic',
+                      rawText: selectedNoticeForDetail.originalText,
+                      deadlineAction: '',
+                      audience: selectedNoticeForDetail.targetAudience,
+                      urgency: 'high'
+                    });
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-[#FFFDF7] border border-[#E2DDD0] text-xs font-mono text-[#172B4D] hover:bg-[#F7F4E9] flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-[#D9A928]" />
+                  <span>Export .ics Calendar File</span>
+                </button>
+              ) : (
+                <span className="text-[11px] font-mono text-[#172B4D]/50 italic">
+                  No date specified
+                </span>
+              )}
 
-              <button
-                type="button"
-                onClick={() => {
-                  const targetDate = selectedNoticeForDetail.date;
-                  setSelectedNoticeForDetail(null);
-                  onNavigateToCalendarDate(targetDate);
-                }}
-                className="px-4 py-2 rounded-xl bg-[#172B4D] text-[#FFFDF7] text-xs font-mono font-medium hover:bg-[#244270] flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>Navigate to Date on Calendar</span>
-                <ArrowRight className="w-3.5 h-3.5 text-[#D9A928]" />
-              </button>
+              {selectedNoticeForDetail.date ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetDate = selectedNoticeForDetail.date;
+                    setSelectedNoticeForDetail(null);
+                    if (targetDate) onNavigateToCalendarDate(targetDate);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#172B4D] text-[#FFFDF7] text-xs font-mono font-medium hover:bg-[#244270] flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>Navigate to Date on Calendar</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-[#D9A928]" />
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

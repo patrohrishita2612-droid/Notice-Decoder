@@ -3,24 +3,7 @@ const { memoryEvents } = require('./event.controller');
 const { memoryNotifications } = require('./notice.controller');
 
 // Memory store fallback for conflict requests
-let memoryConflicts = [
-  {
-    id: 1,
-    event_id: 2,
-    event_title: 'Lecture: CS-302 CSA',
-    student_id: 'user-default-1',
-    student_name: 'Kavya Rane',
-    student_email: 'kavya@campus.edu',
-    conflicting_commitment_title: 'Meeting (Seminar Hall B)',
-    overlap_minutes: 30,
-    student_reason: 'Student coordinator briefing for annual symposium overlaps with first 30 minutes of CS-302 lecture.',
-    suggested_date: '2026-11-13',
-    suggested_time: '11:00 AM - 12:00 PM',
-    status: 'submitted', // 'submitted', 'under_review', 'accepted', 'rejected', 'alternative_proposed'
-    professor_response: null,
-    created_at: new Date(Date.now() - 3600000 * 5).toISOString()
-  }
-];
+let memoryConflicts = [];
 
 /**
  * Controller: Submit a Schedule Conflict Request
@@ -47,9 +30,9 @@ async function submitConflictRequest(req, res, next) {
       id: memoryConflicts.length + 1,
       event_id: event_id || null,
       event_title: event_title.trim(),
-      student_id: req.user?.id || 'user-default-1',
-      student_name: req.user?.name || 'Enrolled Student',
-      student_email: req.user?.email || 'student@campus.edu',
+      student_id: req.user?.id || null,
+      student_name: req.user?.name || 'Student',
+      student_email: req.user?.email || '',
       conflicting_commitment_title: (conflicting_commitment_title || 'Personal Commitment').trim(),
       overlap_minutes: Number(overlap_minutes) || 30,
       student_reason: student_reason.trim(),

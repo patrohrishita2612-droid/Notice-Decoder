@@ -29,116 +29,7 @@ export interface CalendarEvent {
   sourceNoticeId?: string;
 }
 
-export const INITIAL_ACADEMIC_EVENTS: CalendarEvent[] = [
-  {
-    id: 'ev-1',
-    title: 'Meeting',
-    date: '2026-11-13',
-    startTime: '09:30',
-    endTime: '10:30',
-    category: 'Meeting',
-    color: 'cyan',
-    venue: 'Seminar Hall B',
-    description: 'Faculty and student coordinators briefing for tech symposium.',
-    reminderMinutes: 15,
-    isOfficial: false
-  },
-  {
-    id: 'ev-2',
-    title: 'Lecture: CS-302 CSA',
-    date: '2026-11-13',
-    startTime: '10:00',
-    endTime: '11:00',
-    category: 'Lecture',
-    color: 'blue',
-    venue: 'Room 204',
-    description: 'Computer System Architecture weekly regular lecture by Dr. S. Mehta.',
-    reminderMinutes: 10,
-    isOfficial: true,
-    publishedBy: 'Dr. Evelyn Reed (Head of Department)',
-    targetAudience: 'CS-302 CSA'
-  },
-  {
-    id: 'ev-3',
-    title: 'Practical Record Books Due',
-    date: '2026-11-13',
-    startTime: '12:00',
-    endTime: '12:30',
-    category: 'Deadline',
-    color: 'rose',
-    venue: 'Department Office',
-    description: 'Mandatory deposit of certified practical journals for internal assessment.',
-    isAllDay: false,
-    sourceNoticeTitle: 'Internal Test 2 (CSA)',
-    isOfficial: true,
-    publishedBy: 'Dr. Evelyn Reed (Head of Department)',
-    targetAudience: 'CS-302 CSA'
-  },
-  {
-    id: 'ev-4',
-    title: 'Guest Lecture: Microservices',
-    date: '2026-11-14',
-    startTime: '09:30',
-    endTime: '10:30',
-    category: 'Guest Lecture',
-    color: 'forest',
-    venue: 'Seminar Hall B',
-    description: 'Dr. A. Ramanujan (Google Cloud) expert session on scalable cloud microservices.',
-    sourceNoticeTitle: 'Tech-Innovate Series 2026',
-    isOfficial: true,
-    publishedBy: 'Dr. Evelyn Reed (Head of Department)',
-    targetAudience: 'All Students'
-  },
-  {
-    id: 'ev-5',
-    title: 'Project Phase 1 Review',
-    date: '2026-11-14',
-    startTime: '11:30',
-    endTime: '12:30',
-    category: 'Academic',
-    color: 'amber',
-    venue: 'Project Lab 3',
-    description: 'Capstone project progress review with faculty evaluation committee.',
-    sourceNoticeTitle: 'Capstone Committee Notice',
-    isOfficial: true,
-    publishedBy: 'Dr. Evelyn Reed (Head of Department)',
-    targetAudience: 'All Students'
-  },
-  {
-    id: 'ev-6',
-    title: 'CS-304 DBMS Lecture',
-    date: '2026-11-10',
-    startTime: '11:15',
-    endTime: '12:15',
-    category: 'Lecture',
-    color: 'blue',
-    venue: 'Hall 102',
-    description: 'Database query optimization and indexing techniques.'
-  },
-  {
-    id: 'ev-7',
-    title: 'CS-306 OS Concurrency Lecture',
-    date: '2026-11-11',
-    startTime: '14:00',
-    endTime: '15:00',
-    category: 'Lecture',
-    color: 'blue',
-    venue: 'Room 301',
-    description: 'Semaphore mechanisms and mutual exclusion algorithms.'
-  },
-  {
-    id: 'ev-8',
-    title: 'Internal Test 2: CS-302',
-    date: '2026-11-18',
-    startTime: '10:00',
-    endTime: '11:30',
-    category: 'Examination',
-    color: 'amber',
-    venue: 'Room 204 / 206',
-    description: 'Offline mid-term evaluation. Approved calculators only.',
-    sourceNoticeTitle: 'Circular Ref CE/2026/NOV-14'
-  }
-];
+export const INITIAL_ACADEMIC_EVENTS: CalendarEvent[] = [];
 
 function parseTimeToMinutes(t: string): number {
   if (!t) return 0;
@@ -207,20 +98,26 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
     onEventsChange?.(newEvents);
   };
 
-  // Selected date state (defaults to 2026-11-13 to showcase the prototype overlap specimen)
-  const [internalSelectedDate, setInternalSelectedDate] = useState<string>(propSelectedDate || '2026-11-13');
-  const selectedDate = propSelectedDate || internalSelectedDate;
-
   // Real today date string
   const todayDateStr = useMemo(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   }, []);
 
+  // Selected date state (defaults to real today date)
+  const [internalSelectedDate, setInternalSelectedDate] = useState<string>(propSelectedDate || todayDateStr);
+  const selectedDate = propSelectedDate || internalSelectedDate;
+
   // Current calendar view month and year
   const [viewDate, setViewDate] = useState<Date>(() => {
-    const parts = (propSelectedDate || '2026-11-13').split('-');
-    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+    if (propSelectedDate) {
+      const parts = propSelectedDate.split('-');
+      if (parts.length >= 2) {
+        return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+      }
+    }
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
   });
 
   const year = viewDate.getFullYear();
@@ -795,11 +692,6 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             </h2>
             <div className="flex items-center gap-2 text-xs font-mono text-[#172B4D]/70">
               <span>Personal Academic Calendar · {events.length} Synchronized Events</span>
-              {selectedDate === '2026-11-13' && (
-                <span className="px-1.5 py-0.5 rounded bg-[#79C8D0]/20 text-[#172B4D] text-[10px] font-bold border border-[#79C8D0]/40">
-                  Specimen Date
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -1089,91 +981,99 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
 
         {/* Timeline Interactive Controls & Quick Shift Bar */}
         <div className="mt-5 pt-3 border-t border-[#E2DDD0]/80 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-[#172B4D]">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[#172B4D]/60 text-[11px]">Selected:</span>
-            <select
-              value={selectedTimelineEventId}
-              onChange={(e) => setSelectedTimelineEventId(e.target.value)}
-              className="px-2.5 py-1 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] font-semibold text-xs cursor-pointer"
-            >
-              {selectedDateEvents.map(ev => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.title} {ev.isOfficial ? '★ (Official Notice)' : ''} ({ev.startTime}–{ev.endTime})
-                </option>
-              ))}
-            </select>
+          {selectedDateEvents.length > 0 ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[#172B4D]/60 text-[11px]">Selected:</span>
+                <select
+                  value={selectedTimelineEventId}
+                  onChange={(e) => setSelectedTimelineEventId(e.target.value)}
+                  className="px-2.5 py-1 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] font-semibold text-xs cursor-pointer"
+                >
+                  {selectedDateEvents.map(ev => (
+                    <option key={ev.id} value={ev.id}>
+                      {ev.title} {ev.isOfficial ? '★ (Official Notice)' : ''} ({ev.startTime}–{ev.endTime})
+                    </option>
+                  ))}
+                </select>
 
-            {/* If selected event is Official and user is a Student: Lock editing, show Conflict Report button */}
-            {selectedTimelineEvent?.isOfficial && isStudent ? (
-              <div className="flex flex-wrap items-center gap-2 ml-1">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#172B4D] text-[#D9A928] text-xs font-mono font-bold shadow-2xs">
-                  <Lock className="w-3.5 h-3.5 text-[#D9A928]" />
-                  <span>Official Notice (Locked)</span>
-                </span>
+                {/* If selected event is Official and user is a Student: Lock editing, show Conflict Report button */}
+                {selectedTimelineEvent?.isOfficial && isStudent ? (
+                  <div className="flex flex-wrap items-center gap-2 ml-1">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#172B4D] text-[#D9A928] text-xs font-mono font-bold shadow-2xs">
+                      <Lock className="w-3.5 h-3.5 text-[#D9A928]" />
+                      <span>Official Notice (Locked)</span>
+                    </span>
 
-                <button
-                  type="button"
-                  onClick={() => setIsConflictReportOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#D9A928] hover:bg-[#B88C1A] text-[#172B4D] font-mono text-xs font-bold transition-all shadow-xs cursor-pointer"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>Report Conflict / Request Schedule Change</span>
-                </button>
-              </div>
-            ) : (
-              <>
-                {/* Quick Shift Buttons */}
-                <span className="text-[#172B4D]/60 text-[11px] ml-2">Shift:</span>
-                <button
-                  type="button"
-                  onClick={() => handleShiftTimelineEvent(-15)}
-                  className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
-                  title="Shift -15 minutes"
-                >
-                  -15m
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleShiftTimelineEvent(15)}
-                  className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
-                  title="Shift +15 minutes"
-                >
-                  +15m
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleShiftTimelineEvent(30)}
-                  className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
-                  title="Shift +30 minutes"
-                >
-                  +30m
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsConflictReportOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#D9A928] hover:bg-[#B88C1A] text-[#172B4D] font-mono text-xs font-bold transition-all shadow-xs cursor-pointer"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span>Report Conflict / Request Schedule Change</span>
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Quick Shift Buttons */}
+                    <span className="text-[#172B4D]/60 text-[11px] ml-2">Shift:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleShiftTimelineEvent(-15)}
+                      className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
+                      title="Shift -15 minutes"
+                    >
+                      -15m
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleShiftTimelineEvent(15)}
+                      className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
+                      title="Shift +15 minutes"
+                    >
+                      +15m
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleShiftTimelineEvent(30)}
+                      className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
+                      title="Shift +30 minutes"
+                    >
+                      +30m
+                    </button>
 
-                {selectedTimelineEvent && (
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEditEvent(selectedTimelineEvent)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer ml-2"
-                  >
-                    <Edit3 className="w-3 h-3" />
-                    <span>Edit</span>
-                  </button>
+                    {selectedTimelineEvent && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditEvent(selectedTimelineEvent)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer ml-2"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>Edit</span>
+                      </button>
+                    )}
+                  </>
                 )}
-              </>
-            )}
-          </div>
+              </div>
 
-          {/* Delete Action (only if personal or if professor) */}
-          {selectedTimelineEvent && (!selectedTimelineEvent.isOfficial || !isStudent) && (
-            <button
-              type="button"
-              onClick={() => handlePromptDelete(selectedTimelineEvent)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#FFF0F0] border border-[#FCA5A5] text-[#D9574F] hover:bg-[#FEE2E2] cursor-pointer"
-              title="Delete Selected Event"
-            >
-              <Trash2 className="w-3 h-3" />
-              <span>Delete</span>
-            </button>
+              {/* Delete Action (only if personal or if professor) */}
+              {selectedTimelineEvent && (!selectedTimelineEvent.isOfficial || !isStudent) && (
+                <button
+                  type="button"
+                  onClick={() => handlePromptDelete(selectedTimelineEvent)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#FFF0F0] border border-[#FCA5A5] text-[#D9574F] hover:bg-[#FEE2E2] cursor-pointer"
+                  title="Delete Selected Event"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Delete</span>
+                </button>
+              )}
+            </>
+          ) : (
+            <div className="text-xs font-mono text-[#172B4D]/50 italic">
+              No events scheduled for this day. Click anywhere on the timeline grid above to add a slot.
+            </div>
           )}
         </div>
       </div>
@@ -1542,7 +1442,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
           <div className="py-12 px-6 rounded-xl bg-[#F7F4E9]/30 border border-dashed border-[#E2DDD0] text-center">
             <CalendarIcon className="w-8 h-8 text-[#172B4D]/30 mx-auto mb-2" />
             <h4 className="font-serif font-bold text-base text-[#172B4D]">
-              No Events Scheduled for this Date
+              No events scheduled for this day.
             </h4>
             <p className="text-xs text-[#172B4D]/60 font-sans mt-1">
               Select another date on the calendar above or click &ldquo;Add Event to this Date&rdquo; to plan a session.

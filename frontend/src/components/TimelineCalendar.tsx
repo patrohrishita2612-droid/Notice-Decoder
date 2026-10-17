@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  Plus, Clock, RotateCcw, Trash2, X, 
+  Plus, Clock, Trash2, X, 
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, AlertTriangle 
 } from 'lucide-react';
 
@@ -15,24 +15,7 @@ export interface CalendarEvent {
   isDeadlineOnly?: boolean;
 }
 
-export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [
-  {
-    id: 'ev-1',
-    title: 'Meeting',
-    startTime: '09:30',
-    endTime: '10:30',
-    color: 'cyan',
-    date: '2026-11-13'
-  },
-  {
-    id: 'ev-2',
-    title: 'Lecture',
-    startTime: '10:00',
-    endTime: '11:00',
-    color: 'blue',
-    date: '2026-11-13'
-  }
-];
+export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [];
 
 function parseTimeToMinutes(t: string): number {
   if (!t) return 0;
@@ -276,12 +259,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
     }
   };
 
-  // Reset to sample reference state
-  const handleResetSample = () => {
-    updateEvents(INITIAL_CALENDAR_EVENTS);
-    setSelectedEventId(INITIAL_CALENDAR_EVENTS[0].id);
-    setActiveMode('idle');
-  };
+
 
   return (
     <section className={`w-full ${compact ? 'py-4' : 'py-8'}`}>
@@ -506,16 +484,6 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                 </button>
               </div>
 
-              {/* Reset to Original Specimen */}
-              <button
-                type="button"
-                onClick={handleResetSample}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-[#172D50]/60 hover:text-[#172D50] transition-colors cursor-pointer"
-                title="Reset to 9:30 Meeting vs 10:00 Lecture"
-              >
-                <RotateCcw className="w-3 h-3" />
-                <span>Reset Sample</span>
-              </button>
             </div>
           </div>
         )}

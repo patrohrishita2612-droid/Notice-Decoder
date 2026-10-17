@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, ALLOW_DEMO_LOGINS, DEMO_CREDENTIALS } from '../context/AuthContext';
 import { ScrollProgressIndicator } from './ScrollProgressIndicator';
 import { ScrollWordReveal } from './ScrollWordReveal';
 import { ScrollCurvedJourney } from './ScrollCurvedJourney';
@@ -7,7 +7,7 @@ import { TrustReliabilitySection } from './TrustReliabilitySection';
 import { Footer } from './Footer';
 import { 
   ArrowRight, Lock, Mail, Key, Check, AlertCircle, 
-  Eye, EyeOff, ShieldCheck, WifiOff 
+  Eye, EyeOff, ShieldCheck, WifiOff, Sparkles 
 } from 'lucide-react';
 
 interface PublicLandingProps {
@@ -38,12 +38,7 @@ export const PublicLanding: React.FC<PublicLandingProps> = ({
   const [successMessage, setSuccessMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Quick fill helper for evaluation
-  const handleQuickFill = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setErrorMessage('');
-  };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,6 +103,34 @@ export const PublicLanding: React.FC<PublicLandingProps> = ({
       onLoginSuccess?.();
     }
     setIsSubmitting(false);
+  };
+
+  // Demo Login Handler: Authenticates directly through the secure login mechanism
+  const handleDemoLogin = async (role: 'student' | 'professor') => {
+    const creds = DEMO_CREDENTIALS[role];
+    setEmail(creds.email);
+    setPassword(creds.password);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    if (!isOnline) {
+      setErrorMessage('Internet Connection Required: You are currently offline. Authentication cannot be completed offline.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await login(creds.email, creds.password, keepMeSignedIn);
+      if (!res.success) {
+        setErrorMessage(res.error || 'Failed to authenticate demo account.');
+      } else {
+        onLoginSuccess?.(res.destination || undefined);
+      }
+    } catch {
+      setErrorMessage('An unexpected authentication error occurred while signing in with demo account.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const scrollToAuth = () => {
@@ -360,54 +383,59 @@ export const PublicLanding: React.FC<PublicLandingProps> = ({
               </button>
             </div>
 
-            {/* Quick Demo Credentials Autofill Banner */}
-            <div className="mb-6 p-3 rounded-xl bg-[#F7F4E9] border border-[#E2DDD0] text-xs font-mono space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[#172B4D]/60 text-[10px] uppercase font-bold tracking-wider">
-                  Demo Evaluation Accounts
-                </span>
-                <span className="text-[10px] text-[#D9A928] bg-[#172B4D] px-2 py-0.5 rounded-full font-mono font-medium">
-                  1-Click Instant Fill
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                <div className="p-2.5 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] flex flex-col justify-between gap-1.5 shadow-2xs">
-                  <div>
-                    <span className="text-[10px] text-[#172B4D]/60 block font-semibold uppercase tracking-wider">
-                      Student Demo
-                    </span>
-                    <span className="font-mono text-xs text-[#172B4D] font-medium block truncate">
-                      student@campus.edu
-                    </span>
-                  </div>
+            {/* Demo Evaluation Logins */}
+            {ALLOW_DEMO_LOGINS && authMode === 'login' && (
+              <div className="mb-6 p-3.5 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#172B4D] text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#D9A928]" />
+                    Demo Evaluation Logins
+                  </span>
+                  <span className="text-[10px] text-[#172B4D]/60 bg-[#E8E5BA] px-2 py-0.5 rounded font-mono">
+                    Secure Auth Flow
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
                   <button
                     type="button"
-                    onClick={() => handleQuickFill('student@campus.edu', 'campus2026')}
-                    className="w-full py-1.5 rounded bg-[#172B4D] text-[#FFFDF7] hover:bg-[#244270] transition-colors text-[11px] font-medium cursor-pointer text-center"
+                    onClick={() => handleDemoLogin('student')}
+                    disabled={isSubmitting}
+                    className="p-3 rounded-xl bg-[#FFFDF7] border border-[#E2DDD0] hover:border-[#172B4D] hover:bg-[#FAF8DB]/30 text-left transition-all cursor-pointer group shadow-2xs"
                   >
-                    Autofill Student
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-[#172B4D]/60 uppercase font-bold tracking-wider">Student Role</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-[#172B4D]/40 group-hover:text-[#172B4D] group-hover:translate-x-0.5 transition-all" />
+                    </div>
+                    <span className="font-bold text-xs text-[#172B4D] block group-hover:text-[#244270] mt-1">
+                      Student Demo Login
+                    </span>
+                    <span className="text-[10px] text-[#172B4D]/60 block font-mono mt-0.5 truncate">
+                      {DEMO_CREDENTIALS.student.email}
+                    </span>
                   </button>
-                </div>
 
-                <div className="p-2.5 rounded-lg bg-[#FFFDF7] border border-[#D9A928]/60 flex flex-col justify-between gap-1.5 shadow-2xs">
-                  <div>
-                    <span className="text-[10px] text-[#D9A928] block font-bold uppercase tracking-wider">
-                      Professor Demo
-                    </span>
-                    <span className="font-mono text-xs text-[#172B4D] font-medium block truncate">
-                      professor@campus.edu
-                    </span>
-                  </div>
                   <button
                     type="button"
-                    onClick={() => handleQuickFill('professor@campus.edu', 'prof2026')}
-                    className="w-full py-1.5 rounded bg-[#D9A928] text-[#172B4D] hover:bg-[#B88C1A] transition-colors text-[11px] font-bold cursor-pointer text-center"
+                    onClick={() => handleDemoLogin('professor')}
+                    disabled={isSubmitting}
+                    className="p-3 rounded-xl bg-[#FFFDF7] border border-[#D9A928]/60 hover:border-[#172B4D] hover:bg-[#FAF8DB]/30 text-left transition-all cursor-pointer group shadow-2xs"
                   >
-                    Autofill Professor
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-[#D9A928] uppercase font-bold tracking-wider">Faculty Role</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-[#D9A928]/60 group-hover:text-[#172B4D] group-hover:translate-x-0.5 transition-all" />
+                    </div>
+                    <span className="font-bold text-xs text-[#172B4D] block group-hover:text-[#244270] mt-1">
+                      Professor Demo Login
+                    </span>
+                    <span className="text-[10px] text-[#172B4D]/60 block font-mono mt-0.5 truncate">
+                      {DEMO_CREDENTIALS.professor.email}
+                    </span>
                   </button>
                 </div>
               </div>
-            </div>
+            )}
+
+
 
             {/* Error Message */}
             {errorMessage && (
@@ -485,7 +513,7 @@ export const PublicLanding: React.FC<PublicLandingProps> = ({
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="student@campus.edu"
+                    placeholder="name@university.edu"
                     className="w-full pl-9 pr-3.5 py-2.5 rounded-lg bg-[#F7F4E9]/60 border border-[#E2DDD0] text-sm text-[#172B4D] placeholder-[#172B4D]/40 focus:outline-hidden focus:border-[#172B4D] focus:bg-[#FFFDF7] focus:ring-1 focus:ring-[#172B4D] transition-all font-sans"
                   />
                   <Mail className="w-4 h-4 text-[#172B4D]/40 absolute left-3 top-3" />

@@ -2,71 +2,9 @@ const { getSupabaseClient } = require('../config/database');
 const { processNotice } = require('../services/ai.service');
 
 // In-memory fallback repository when Supabase is not connected
-let memoryNotices = [
-  {
-    id: 1,
-    title: 'Conduct of Internal Assessment Test 2 (CSA)',
-    original_text: 'DEPARTMENT OF COMPUTER ENGINEERING\nCIRCULAR NO: CE/2026/NOV-14\n\nSubject: Conduct of Internal Assessment Test 2 (Offline Mode)\n\nAll third-year students (Batch 2024-2028) are hereby informed that Internal Test 2 for CSA (CS-302) is scheduled on 18 November 2026 from 10:00 AM to 11:30 AM in Examination Hall Room 204.\n\nStudents must submit their certified practical record books to the department office no later than 12:00 noon on the same day. Late submissions will result in forfeiture of internal marks.',
-    summary: 'Internal Test 2 scheduled for 10:00–11:30 AM in Room 204. Mandatory practical records due by 12:00 noon.',
-    date: '2026-11-18',
-    time: '10:00 AM - 11:30 AM',
-    venue: 'Examination Hall Room 204',
-    target_audience: 'CS-302 CSA',
-    required_action: 'Submit certified practical record books to department office by 12:00 noon.',
-    issuing_department: 'Department of Computer Engineering',
-    author_id: 'user-default-prof',
-    published_by: 'Dr. Evelyn Reed (Head of Department)',
-    status: 'published',
-    file_name: 'CE_Internal_Assessment_2.pdf',
-    file_type: 'application/pdf',
-    file_size: 245760,
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString()
-  },
-  {
-    id: 2,
-    title: 'Tech-Innovate Series 2026: Dr. Ramanujan Guest Lecture',
-    original_text: 'TECH-INNOVATE SERIES 2026\nDate: 14 November 2026\nSpeaker: Dr. A. Ramanujan (Senior Systems Architect, Google Cloud)\nTime: 09:30 AM to 10:30 AM\nVenue: Seminar Hall B (Block 1)\nAttendance is compulsory for CSE & IT students. Topic: Scalable Cloud Microservices.',
-    summary: 'Dr. Ramanujan expert lecture on distributed microservices. Compulsory attendance for CSE & IT students.',
-    date: '2026-11-14',
-    time: '09:30 AM - 10:30 AM',
-    venue: 'Seminar Hall B',
-    target_audience: 'All Students',
-    required_action: 'Pre-register attendance link on student portal before 5:00 PM.',
-    issuing_department: 'Industry Relations & Placement Cell',
-    author_id: 'user-default-prof',
-    published_by: 'Dr. Evelyn Reed (Head of Department)',
-    status: 'published',
-    file_name: 'Tech_Innovate_Lecture_Flyer.png',
-    file_type: 'image/png',
-    file_size: 512000,
-    created_at: new Date(Date.now() - 86400000).toISOString()
-  }
-];
+let memoryNotices = [];
 
-let memoryNotifications = [
-  {
-    id: 1,
-    user_id: null,
-    target_audience: 'All Students',
-    title: 'New Official Circular: Tech-Innovate Series 2026',
-    message: 'Dr. Evelyn Reed published a guest lecture notice on Scalable Cloud Microservices for 14 Nov, 09:30 AM.',
-    type: 'notice_published',
-    is_read: false,
-    related_notice_id: 2,
-    created_at: new Date(Date.now() - 3600000 * 4).toISOString()
-  },
-  {
-    id: 2,
-    user_id: null,
-    target_audience: 'CS-302 CSA',
-    title: 'Official Exam Notice: Internal Assessment Test 2',
-    message: 'Examination scheduled for 18 Nov, 10:00 AM in Room 204. Practical records due by 12:00 noon.',
-    type: 'notice_published',
-    is_read: false,
-    related_notice_id: 1,
-    created_at: new Date(Date.now() - 3600000 * 24).toISOString()
-  }
-];
+let memoryNotifications = [];
 
 /**
  * Controller: Handle File Upload (PDF, JPG, PNG) & Text Extraction
@@ -129,15 +67,15 @@ async function uploadNoticeFile(req, res, next) {
       },
       extracted: {
         rawText,
-        title: extracted.summary?.split('.')[0] || originalname.replace(/\.[^/.]+$/, ''),
-        summary: extracted.summary,
-        date: extracted.date || '2026-11-18',
-        time: extracted.time || '10:00 AM - 11:30 AM',
-        venue: extracted.venue || 'Room 204',
-        targetAudience: extracted.target_audience || 'All Students',
-        requiredAction: extracted.required_action || 'Review and sync with personal timetable.',
-        category: rawText.toLowerCase().includes('exam') ? 'Examination' : 'Academic',
-        urgency: rawText.toLowerCase().includes('mandatory') ? 'high' : 'normal'
+        title: extracted.title || extracted.summary?.split('.')[0] || originalname.replace(/\.[^/.]+$/, ''),
+        summary: extracted.summary || '',
+        date: extracted.event_date || extracted.date || null,
+        time: extracted.time || (extracted.start_time ? (extracted.end_time ? `${extracted.start_time} - ${extracted.end_time}` : extracted.start_time) : null),
+        venue: extracted.venue || null,
+        targetAudience: extracted.target_audience || null,
+        requiredAction: extracted.required_action || null,
+        category: extracted.category || (rawText.toLowerCase().includes('exam') ? 'Examination' : 'Academic'),
+        urgency: extracted.urgency || (rawText.toLowerCase().includes('mandatory') ? 'high' : 'normal')
       }
     });
   } catch (error) {

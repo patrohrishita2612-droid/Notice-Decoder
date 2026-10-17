@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Input & Output Validators for AI Notice Processing
  * Ensures strict conformity to the 13-field structured notice schema,
  * enforces non-hallucination verification on evidence quotes, and handles errors safely.
@@ -50,9 +50,12 @@ function validateNoticeInput(input) {
     throw new ValidationError('Notice text cannot be empty.');
   }
 
-  // Minimum meaningful length check (at least 10 characters)
-  if (cleanText.length < 10) {
-    throw new ValidationError('Notice text is too short to be processed (minimum 10 characters required).');
+  // Meaningless, gibberish, or insufficient input check (e.g. "hiiii", single repeated words, < 3 words)
+  const words = cleanText.split(/\s+/).filter(Boolean);
+  const isRepetitiveGibberish = /^(.)\1+$/i.test(cleanText) || /^([a-z])\1{2,}$/i.test(cleanText) || /^(hi+|hello+|hey+|test+|asdf+|qwerty+)$/i.test(cleanText);
+
+  if (cleanText.length < 15 || words.length < 3 || isRepetitiveGibberish) {
+    throw new ValidationError('Not enough information to extract a notice. Please upload a valid notice or enter more details. Notice text is too short to be processed.');
   }
 
   return cleanText;

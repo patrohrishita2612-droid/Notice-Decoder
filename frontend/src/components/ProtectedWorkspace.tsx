@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { PersonalAcademicCalendar, CalendarEvent, INITIAL_ACADEMIC_EVENTS } from './PersonalAcademicCalendar';
 import { NoticeProcessingSteps } from './NoticeProcessingSteps';
@@ -24,140 +24,13 @@ interface PersonalDeadline {
   sourceNotice?: string;
 }
 
-const INITIAL_DEADLINES: PersonalDeadline[] = [
-  {
-    id: 'dl-1',
-    title: 'Certified Practical Record Books Submission',
-    dueDate: '13 November 2026',
-    dueTime: '12:00 Noon',
-    action: 'Submit certified practical record books to department office for CS-302 CSA.',
-    completed: false,
-    priority: 'high',
-    sourceNotice: 'Internal Test 2 (CSA)'
-  },
-  {
-    id: 'dl-2',
-    title: 'Pre-registration for Microservices Workshop',
-    dueDate: '13 November 2026',
-    dueTime: '05:00 PM',
-    action: 'Complete registration link on student portal before Dr. Ramanujan guest lecture.',
-    completed: true,
-    priority: 'medium',
-    sourceNotice: 'Guest Lecture: Microservices'
-  },
-  {
-    id: 'dl-3',
-    title: 'Capstone Phase 1 Slides & GitHub Repository Upload',
-    dueDate: '14 November 2026',
-    dueTime: '09:00 AM',
-    action: 'Upload presentation slides and repository links for project evaluation.',
-    completed: false,
-    priority: 'high',
-    sourceNotice: 'Project Phase 1 Review'
-  }
-];
+const INITIAL_DEADLINES: PersonalDeadline[] = [];
 
-const INITIAL_OFFICIAL_NOTICES: OfficialNotice[] = [
-  {
-    id: 'notice-1',
-    title: 'Conduct of Internal Assessment Test 2 (CSA)',
-    originalText: `DEPARTMENT OF COMPUTER ENGINEERING\nCIRCULAR NO: CE/2026/NOV-14\n\nSubject: Conduct of Internal Assessment Test 2 (Offline Mode)\n\nAll third-year students (Batch 2024-2028) are hereby informed that Internal Test 2 for CSA (CS-302) is scheduled on 18 November 2026 from 10:00 AM to 11:30 AM in Examination Hall Room 204.\n\nStudents must submit their certified practical record books to the department office no later than 12:00 noon on the same day. Late submissions will result in forfeiture of internal marks.`,
-    summary: 'Internal Test 2 scheduled for 10:00–11:30 AM in Room 204. Mandatory practical records due by 12:00 noon.',
-    date: '2026-11-18',
-    time: '10:00 AM - 11:30 AM',
-    venue: 'Examination Hall Room 204',
-    targetAudience: 'CS-302 CSA',
-    requiredAction: 'Submit certified practical record books to department office by 12:00 noon.',
-    issuingDepartment: 'Department of Computer Engineering',
-    authorId: 'user-default-prof',
-    publishedBy: 'Dr. Evelyn Reed (Head of Department)',
-    status: 'published',
-    fileName: 'CE_Internal_Assessment_2.pdf',
-    fileType: 'application/pdf',
-    fileSize: 245760,
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString()
-  },
-  {
-    id: 'notice-2',
-    title: 'Tech-Innovate Series 2026: Dr. Ramanujan Guest Lecture',
-    originalText: `TECH-INNOVATE SERIES 2026\nDate: 14 November 2026\nSpeaker: Dr. A. Ramanujan (Senior Systems Architect, Google Cloud)\nTime: 09:30 AM to 10:30 AM\nVenue: Seminar Hall B (Block 1)\nAttendance is compulsory for CSE & IT students. Topic: Scalable Cloud Microservices.`,
-    summary: 'Dr. Ramanujan expert lecture on distributed microservices. Compulsory attendance for CSE & IT students.',
-    date: '2026-11-14',
-    time: '09:30 AM - 10:30 AM',
-    venue: 'Seminar Hall B',
-    targetAudience: 'All Students',
-    requiredAction: 'Pre-register attendance link on student portal before 5:00 PM.',
-    issuingDepartment: 'Industry Relations & Placement Cell',
-    authorId: 'user-default-prof',
-    publishedBy: 'Dr. Evelyn Reed (Head of Department)',
-    status: 'published',
-    fileName: 'Tech_Innovate_Lecture_Flyer.png',
-    fileType: 'image/png',
-    fileSize: 512000,
-    createdAt: new Date(Date.now() - 86400000).toISOString()
-  }
-];
+const INITIAL_OFFICIAL_NOTICES: OfficialNotice[] = [];
 
-const INITIAL_CONFLICT_REQUESTS: ConflictRequest[] = [
-  {
-    id: 'conflict-1',
-    eventId: 'ev-2',
-    eventTitle: 'Lecture: CS-302 CSA',
-    studentId: 'user-default-1',
-    studentName: 'Kavya Rane',
-    studentEmail: 'kavya@campus.edu',
-    conflictingCommitmentTitle: 'Meeting (Seminar Hall B)',
-    overlapMinutes: 30,
-    studentReason: 'Student coordinator briefing for annual symposium overlaps with first 30 minutes of CS-302 lecture.',
-    suggestedDate: '2026-11-13',
-    suggestedTime: '11:00 AM - 12:00 PM',
-    status: 'submitted',
-    createdAt: new Date(Date.now() - 3600000 * 4).toISOString()
-  }
-];
+const INITIAL_CONFLICT_REQUESTS: ConflictRequest[] = [];
 
-const INITIAL_APP_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: 'notif-1',
-    userId: null,
-    targetAudience: 'All Students',
-    title: 'New Official Circular: Tech-Innovate Series 2026',
-    message: 'Dr. Evelyn Reed published a guest lecture notice on Scalable Cloud Microservices for 14 Nov, 09:30 AM.',
-    type: 'notice_published',
-    isRead: false,
-    relatedNoticeId: 'notice-2',
-    createdAt: new Date(Date.now() - 3600000 * 3).toISOString()
-  },
-  {
-    id: 'notif-2',
-    userId: null,
-    targetAudience: 'CS-302 CSA',
-    title: 'Official Exam Notice: Internal Assessment Test 2',
-    message: 'Examination scheduled for 18 Nov, 10:00 AM in Room 204. Practical records due by 12:00 noon.',
-    type: 'notice_published',
-    isRead: false,
-    relatedNoticeId: 'notice-1',
-    createdAt: new Date(Date.now() - 3600000 * 20).toISOString()
-  }
-];
-
-const TEMPLATE_NOTICES = [
-  {
-    name: 'Internal Test 2 (10:00 AM)',
-    date: '2026-11-18',
-    text: `DEPARTMENT OF COMPUTER ENGINEERING\nCIRCULAR NO: CE/2026/NOV-14\n\nSubject: Conduct of Internal Assessment Test 2 (Offline Mode)\n\nAll third-year students (Batch 2024-2028) are hereby informed that Internal Test 2 for CSA (CS-302) is scheduled on 18 November 2026 from 10:00 AM to 11:30 AM in Examination Hall Room 204.\n\nStudents must submit their certified practical record books to the department office no later than 12:00 noon on the same day. Late submissions will result in forfeiture of internal marks.\n\nNote: Seating for Roll Nos 45–60 is tentatively shifted to Room 206 pending electrical clearance. Carry approved non-programmable calculators.`
-  },
-  {
-    name: 'Guest Lecture (09:30 AM - Overlaps Meeting)',
-    date: '2026-11-13',
-    text: `TECH-INNOVATE SERIES 2026\nDate: 13 November 2026\nSpeaker: Dr. A. Ramanujan (Senior Systems Architect, Google Cloud)\nTime: 09:30 AM to 10:30 AM\nVenue: Seminar Hall B (Block 1)\nAttendance is compulsory for CSE & IT students. Topic: Scalable Cloud Microservices. Q&A session follows.`
-  },
-  {
-    name: 'Project Phase 1 Review (11:30 AM - Clear)',
-    date: '2026-11-14',
-    text: `CAPSTONE PROJECT COMMITTEE\nNotice Ref: CPC/2026/PH1-EVAL\nAll final-year project teams are notified that Project Phase 1 Evaluation is scheduled for Friday, 14 November 2026 from 11:30 AM to 12:30 PM in Project Lab 3. Presentation slides and GitHub repository links must be submitted before 09:00 AM.`
-  }
-];
+const INITIAL_APP_NOTIFICATIONS: AppNotification[] = [];
 
 interface ProtectedWorkspaceProps {
   initialTab?: 'calendar' | 'notices' | 'deadlines' | 'feed' | 'professor';
@@ -248,8 +121,11 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     }
   });
 
-  // Selected date on calendar
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string>('2026-11-13');
+  // Selected date on calendar (real current date)
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  });
 
   // Personal deadlines state (user-scoped and offline cached)
   const [deadlines, setDeadlines] = useState<PersonalDeadline[]>(() => {
@@ -260,6 +136,72 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       return INITIAL_DEADLINES;
     }
   });
+
+  // Sanitize offline storage on mount to eliminate any lingering sample data from earlier sessions
+  useEffect(() => {
+    const SAMPLE_EVENT_IDS = new Set(['ev-1', 'ev-2', 'ev-3', 'ev-4', 'ev-5', 'ev-6', 'ev-7', 'ev-8']);
+    const SAMPLE_NOTICE_TITLES = new Set([
+      'conduct of internal assessment test 2 (csa)',
+      'tech-innovate series 2026: dr. ramanujan guest lecture',
+      'internal assessment test 2 (csa)',
+      'tech-innovate series 2026'
+    ]);
+    const SAMPLE_DEADLINE_IDS = new Set(['dl-1', 'dl-2', 'dl-3']);
+
+    try {
+      const rawEvents = localStorage.getItem(eventsStorageKey);
+      if (rawEvents) {
+        const parsed: CalendarEvent[] = JSON.parse(rawEvents);
+        const filtered = parsed.filter(e => !SAMPLE_EVENT_IDS.has(e.id));
+        if (filtered.length !== parsed.length) {
+          localStorage.setItem(eventsStorageKey, JSON.stringify(filtered));
+          setCalendarEvents(filtered);
+        }
+      }
+
+      const rawNotices = localStorage.getItem(noticesStorageKey);
+      if (rawNotices) {
+        const parsed: OfficialNotice[] = JSON.parse(rawNotices);
+        const filtered = parsed.filter(n => !SAMPLE_NOTICE_TITLES.has(n.title?.toLowerCase()) && n.id !== 'notice-1' && n.id !== 'notice-2');
+        if (filtered.length !== parsed.length) {
+          localStorage.setItem(noticesStorageKey, JSON.stringify(filtered));
+          setOfficialNotices(filtered);
+        }
+      }
+
+      const rawConflicts = localStorage.getItem(conflictsStorageKey);
+      if (rawConflicts) {
+        const parsed: ConflictRequest[] = JSON.parse(rawConflicts);
+        const filtered = parsed.filter(c => c.id !== 'conflict-1' && c.studentId !== 'user-default-1');
+        if (filtered.length !== parsed.length) {
+          localStorage.setItem(conflictsStorageKey, JSON.stringify(filtered));
+          setConflictRequests(filtered);
+        }
+      }
+
+      const rawNotifs = localStorage.getItem(notificationsStorageKey);
+      if (rawNotifs) {
+        const parsed: AppNotification[] = JSON.parse(rawNotifs);
+        const filtered = parsed.filter(n => n.id !== 'notif-1' && n.id !== 'notif-2');
+        if (filtered.length !== parsed.length) {
+          localStorage.setItem(notificationsStorageKey, JSON.stringify(filtered));
+          setNotifications(filtered);
+        }
+      }
+
+      const rawDeadlines = localStorage.getItem(deadlinesStorageKey);
+      if (rawDeadlines) {
+        const parsed: PersonalDeadline[] = JSON.parse(rawDeadlines);
+        const filtered = parsed.filter(d => !SAMPLE_DEADLINE_IDS.has(d.id));
+        if (filtered.length !== parsed.length) {
+          localStorage.setItem(deadlinesStorageKey, JSON.stringify(filtered));
+          setDeadlines(filtered);
+        }
+      }
+    } catch {
+      // Storage error
+    }
+  }, [eventsStorageKey, noticesStorageKey, conflictsStorageKey, notificationsStorageKey, deadlinesStorageKey]);
 
   // Save calendar changes
   const handleCalendarChange = (updated: CalendarEvent[]) => {
@@ -286,14 +228,16 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
   };
 
   // Notice Input & Decoding state
-  const [noticeText, setNoticeText] = useState(TEMPLATE_NOTICES[0].text);
+  const [noticeText, setNoticeText] = useState('');
   const [uploadedFile, setUploadedFile] = useState<{ name: string; type: string; size: number } | null>(null);
   const [fileError, setFileError] = useState('');
   const [isDecoding, setIsDecoding] = useState(false);
-  const [extractedDraft, setExtractedDraft] = useState<ExtractedNotice & { isoDate: string } | null>(null);
+  const [extractedDraft, setExtractedDraft] = useState<(ExtractedNotice & { isoDate: string | null }) | null>(null);
   const [successToast, setSuccessToast] = useState('');
   const [errorToast, setErrorToast] = useState('');
   const [backendDecodedData, setBackendDecodedData] = useState<any>(null);
+  const [backendDecodedError, setBackendDecodedError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Duplicate Warning Modal State
   const [duplicateWarningEvent, setDuplicateWarningEvent] = useState<CalendarEvent | null>(null);
@@ -303,6 +247,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     processUploadedFile(file);
+    e.target.value = '';
   };
 
   const handleDropFile = (e: React.DragEvent) => {
@@ -333,82 +278,112 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       type: file.type,
       size: file.size
     });
-
-    if (file.name.toLowerCase().includes('exam') || file.name.toLowerCase().includes('csa')) {
-      setNoticeText(TEMPLATE_NOTICES[0].text);
-    } else if (file.name.toLowerCase().includes('lecture') || file.name.toLowerCase().includes('flyer')) {
-      setNoticeText(TEMPLATE_NOTICES[1].text);
-    }
   };
 
   // Trigger decoding process with animated steps
   const handleStartDecoding = () => {
-    if (!noticeText.trim() && !uploadedFile) {
+    const trimmed = noticeText.trim();
+    if (!trimmed && !uploadedFile) {
       setErrorToast('Please upload a notice file or paste circular text before decoding.');
       return;
     }
+
+    // Meaningless text check (e.g. "hiiii", single word, < 15 chars, < 3 words)
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    const isGibberish = /^(.)\1+$/i.test(trimmed) || /^([a-z])\1{2,}$/i.test(trimmed) || /^(hi+|hello+|hey+|test+|asdf+|qwerty+)$/i.test(trimmed);
+
+    if (!uploadedFile && (trimmed.length < 15 || words.length < 3 || isGibberish)) {
+      setErrorToast('Not enough information to extract a notice. Please upload a valid notice or enter more details.');
+      setExtractedDraft(null);
+      return;
+    }
+
     setErrorToast('');
     setIsDecoding(true);
     setBackendDecodedData(null);
+    setBackendDecodedError('');
+    setExtractedDraft(null);
 
     // Concurrently query backend AI decode API if online
-    if (isOnline) {
+    if (isOnline && trimmed) {
       fetch('http://localhost:5000/api/notices/decode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: noticeText })
+        body: JSON.stringify({ text: trimmed })
       })
-        .then(res => res.ok ? res.json() : null)
-        .then(json => {
-          if (json?.data) {
+        .then(async res => {
+          const json = await res.json().catch(() => null);
+          if (res.ok && json?.data) {
             setBackendDecodedData(json.data);
+          } else if (!res.ok && json?.error) {
+            setBackendDecodedError(json.error);
           }
         })
         .catch(() => {
-          // Graceful fallback to offline heuristic
+          // Backend offline or unreachable
         });
     }
   };
 
   // Called when NoticeProcessingSteps finishes its moving line animation
   const handleProcessingComplete = () => {
-    const lower = noticeText.toLowerCase();
+    if (backendDecodedError) {
+      setIsDecoding(false);
+      setErrorToast(backendDecodedError);
+      setExtractedDraft(null);
+      setBackendDecodedError('');
+      return;
+    }
 
-    let title = 'Academic Notice Assessment';
-    let startTime = '10:00';
-    let endTime = '11:30';
-    let venue = 'Department Hall 204';
-    let deadline = 'Same Day, 12:00 Noon';
-    let deadlineAction = 'Submit certified records to department office';
-    let summary = 'Assessment and departmental submissions scheduled. Review extracted hours before calendar sync.';
-    let category: 'Examination' | 'Academic' | 'Guest Lecture' | 'Administrative' = 'Academic';
-    let urgency: 'high' | 'medium' | 'normal' = 'normal';
-    let isoDate = '2026-11-18';
-    let humanDate = '18 November 2026';
+    const trimmed = noticeText.trim();
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    const isGibberish = /^(.)\1+$/i.test(trimmed) || /^([a-z])\1{2,}$/i.test(trimmed) || /^(hi+|hello+|hey+|test+|asdf+|qwerty+)$/i.test(trimmed);
+
+    if (!uploadedFile && (trimmed.length < 15 || words.length < 3 || isGibberish)) {
+      setIsDecoding(false);
+      setErrorToast('Not enough information to extract a notice. Please upload a valid notice or enter more details.');
+      setExtractedDraft(null);
+      return;
+    }
+
+    let title: string | null = null;
+    let startTime: string | null = null;
+    let endTime: string | null = null;
+    let venue: string | null = null;
+    let deadline: string | null = null;
+    let deadlineAction: string | null = null;
+    let summary = '';
+    let category: 'Examination' | 'Academic' | 'Guest Lecture' | 'Administrative' | null = null;
+    let urgency: 'high' | 'medium' | 'normal' | 'unknown' = 'normal';
+    let isoDate: string | null = null;
+    let humanDate: string | null = null;
     const flags: { field: string; reason: string; suggestion: string }[] = [];
 
-    // If backend Gemini AI returned decoded data, prioritize it
+    // If backend AI returned decoded data, prioritize it
     if (backendDecodedData) {
       const data = backendDecodedData;
-      title = data.title || title;
-      summary = data.summary || summary;
+      title = data.title || null;
+      summary = data.summary || '';
       if (data.event_date) {
         humanDate = data.event_date;
         const parsed = new Date(data.event_date);
         if (!isNaN(parsed.getTime())) {
           isoDate = parsed.toISOString().split('T')[0];
+        } else {
+          isoDate = data.event_date;
         }
       }
-      startTime = data.start_time || startTime;
-      endTime = data.end_time || endTime;
-      venue = data.venue || venue;
-      deadline = data.deadline || deadline;
+      startTime = data.start_time || null;
+      endTime = data.end_time || null;
+      venue = data.venue || null;
+      deadline = data.deadline || null;
       if (data.required_actions && data.required_actions.length > 0) {
         deadlineAction = data.required_actions[0];
       }
       if (data.urgency === 'high') urgency = 'high';
       else if (data.urgency === 'medium') urgency = 'medium';
-      else urgency = 'normal';
+      else if (data.urgency === 'low') urgency = 'normal';
+      else urgency = 'unknown';
 
       if (data.missing_information && Array.isArray(data.missing_information)) {
         data.missing_information.forEach((info: string) => {
@@ -419,68 +394,88 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
           });
         });
       }
-    } else
-
-    if (lower.includes('internal test') || lower.includes('csa') || lower.includes('assessment')) {
-      title = 'Internal Test 2 (CSA)';
-      startTime = '10:00';
-      endTime = '11:30';
-      venue = 'Room 204';
-      deadline = '12:00 Noon Sharp';
-      deadlineAction = 'Submit certified practical record books to department office';
-      summary = 'Internal Test 2 scheduled for 10:00–11:30 AM in Room 204. Mandatory practical records due by 12:00 noon.';
-      category = 'Examination';
-      urgency = 'high';
-      isoDate = '2026-11-18';
-      humanDate = '18 November 2026';
-      flags.push({
-        field: 'Venue Relocation',
-        reason: 'Roll Nos 45–60 tentatively shifted to Room 206 due to electrical clearance.',
-        suggestion: 'Confirm final room number on department board before 9:30 AM.'
-      });
-    } else if (lower.includes('guest lecture') || lower.includes('ramanujan') || lower.includes('microservices')) {
-      title = 'Guest Lecture: Microservices';
-      startTime = '09:30';
-      endTime = '10:30';
-      venue = 'Seminar Hall B';
-      deadline = 'Prior Day, 5:00 PM';
-      deadlineAction = 'Pre-register attendance link on student portal';
-      summary = 'Dr. Ramanujan expert lecture on distributed microservices. Compulsory attendance for CSE & IT students.';
-      category = 'Guest Lecture';
-      urgency = 'medium';
-      isoDate = '2026-11-13';
-      humanDate = '13 November 2026';
-      flags.push({
-        field: 'Timetable Coincidence',
-        reason: '09:30–10:30 AM overlaps with scheduled Meeting in Seminar Hall B.',
-        suggestion: 'Clear conflict or request professor schedule adjustment.'
-      });
-    } else if (lower.includes('project') || lower.includes('capstone') || lower.includes('phase 1')) {
-      title = 'Project Phase 1 Review';
-      startTime = '11:30';
-      endTime = '12:30';
-      venue = 'Project Lab 3';
-      deadline = '09:00 AM';
-      deadlineAction = 'Upload presentation slides & repository URL';
-      summary = 'Final year capstone phase 1 evaluation. Review with faculty committee in Project Lab 3.';
-      category = 'Academic';
-      urgency = 'high';
-      isoDate = '2026-11-14';
-      humanDate = '14 November 2026';
     } else {
+      // Direct heuristic extraction from user notice text (strictly no fabricated dates/times)
+      const lines = noticeText.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length > 0) {
+        title = lines[0].replace(/^(subject|re|circular|notice|ref)[:\s-]*/i, '').trim() || null;
+        summary = lines.slice(1, 4).join(' ').substring(0, 180) || noticeText.substring(0, 180);
+      }
+
+      // Check for dates in text: only extract if an actual date pattern is present
+      const dateMatch = noticeText.match(/(\d{4}-\d{2}-\d{2})|(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i);
+      if (dateMatch) {
+        humanDate = dateMatch[0];
+        const parsed = new Date(dateMatch[0].replace(/(st|nd|rd|th)/i, ''));
+        if (!isNaN(parsed.getTime())) {
+          isoDate = parsed.toISOString().split('T')[0];
+        }
+      }
+
+      // Check for times in text: only extract if an actual time pattern is present
       const timeMatch = noticeText.match(/(\d{1,2}:\d{2})\s*(?:AM|PM)?\s*(?:to|–|-)\s*(\d{1,2}:\d{2})\s*(?:AM|PM)?/i);
       if (timeMatch) {
         startTime = timeMatch[1];
         endTime = timeMatch[2];
+      } else {
+        const singleTimeMatch = noticeText.match(/(?:at|from)\s+(\d{1,2}:\d{2})\s*(?:AM|PM)?/i);
+        if (singleTimeMatch) {
+          startTime = singleTimeMatch[1];
+        }
       }
-      title = 'Decoded Campus Notice';
-      venue = 'Main Campus Facility';
-      summary = 'Notice parsed successfully. Extracted time and action items are prepared for your review.';
-      isoDate = '2026-11-15';
-      humanDate = '15 November 2026';
+
+      // Check for venue: only extract if explicitly stated
+      const venueMatch = noticeText.match(/(?:venue|room|hall|lab|auditorium)[:\s]+([^\n.,;]+)/i);
+      if (venueMatch) {
+        venue = venueMatch[1].trim();
+      }
+
+      // Check for deadline
+      const deadlineMatch = noticeText.match(/(?:deadline|submit by|last date)[:\s]+([^\n.,;]+)/i);
+      if (deadlineMatch) {
+        deadline = deadlineMatch[1].trim();
+        deadlineAction = 'Review submission requirement';
+      }
+
+      const lower = noticeText.toLowerCase();
+      if (lower.includes('exam') || lower.includes('test')) category = 'Examination';
+      else if (lower.includes('lecture') || lower.includes('talk') || lower.includes('seminar')) category = 'Guest Lecture';
+      else if (lower.includes('holiday') || lower.includes('admin')) category = 'Administrative';
+      else category = 'Academic';
     }
 
-    const draft: ExtractedNotice & { isoDate: string } = {
+    // If text genuinely lacks identifiable notice information
+    if (!title && !humanDate && !summary) {
+      setIsDecoding(false);
+      setErrorToast('Not enough information to extract a notice. Please upload a valid notice or enter more details.');
+      setExtractedDraft(null);
+      return;
+    }
+
+    // Flag missing fields
+    if (!humanDate) {
+      flags.push({
+        field: 'Event Date',
+        reason: 'No event date specified in notice text.',
+        suggestion: 'Event cannot be scheduled to calendar without a confirmed date.'
+      });
+    }
+    if (!startTime) {
+      flags.push({
+        field: 'Event Time',
+        reason: 'No specific time duration or start time mentioned.',
+        suggestion: 'Check department notice board for time allocation.'
+      });
+    }
+    if (!venue) {
+      flags.push({
+        field: 'Venue',
+        reason: 'No venue or room number specified in notice.',
+        suggestion: 'Verify hall allocation prior to event.'
+      });
+    }
+
+    const draft: ExtractedNotice & { isoDate: string | null } = {
       id: `notice-${Date.now()}`,
       title,
       rawText: noticeText,
@@ -506,17 +501,17 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     setSuccessToast('Notice decoded into structured academic schema.');
     setTimeout(() => setSuccessToast(''), 3500);
 
-    // If new deadline detected, add to personal deadlines
-    if (deadline && deadlineAction) {
+    // If a genuine deadline is detected, add to personal deadlines
+    if (deadline && deadlineAction && deadline !== 'Not specified') {
       const newDl: PersonalDeadline = {
         id: `dl-${Date.now()}`,
-        title: `${title} Action Requirement`,
-        dueDate: humanDate,
+        title: `${title || 'Notice'} Action Requirement`,
+        dueDate: humanDate || 'Not specified',
         dueTime: deadline,
         action: deadlineAction,
         completed: false,
-        priority: urgency,
-        sourceNotice: title
+        priority: urgency === 'high' ? 'high' : 'normal',
+        sourceNotice: title || 'Campus Notice'
       };
       const updatedDl = [newDl, ...deadlines];
       setDeadlines(updatedDl);
@@ -532,9 +527,14 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
   const handleAddToCalendar = () => {
     if (!extractedDraft) return;
 
+    if (!extractedDraft.isoDate) {
+      setErrorToast('Cannot add to calendar: This notice does not specify a valid event date.');
+      return;
+    }
+
     // Check whether a circular or event with identical or near-identical title & date exists
     const existing = calendarEvents.find(
-      ev => ev.title.toLowerCase().trim() === extractedDraft.title.toLowerCase().trim() && ev.date === extractedDraft.isoDate
+      ev => ev.title.toLowerCase().trim() === (extractedDraft.title || '').toLowerCase().trim() && ev.date === extractedDraft.isoDate
     );
 
     if (existing) {
@@ -546,18 +546,28 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     commitEventToCalendar(extractedDraft);
   };
 
-  const commitEventToCalendar = (draft: ExtractedNotice & { isoDate: string }) => {
+  const commitEventToCalendar = (draft: ExtractedNotice & { isoDate: string | null }) => {
+    if (!draft.isoDate) {
+      setErrorToast('Cannot add to calendar: Event date is not specified.');
+      return;
+    }
+
+    const category: CalendarEvent['category'] = 
+      (draft.category === 'Examination' || draft.category === 'Guest Lecture' || draft.category === 'Academic')
+        ? draft.category
+        : 'Academic';
+
     const newCalendarEvent: CalendarEvent = {
       id: `ev-decoded-${Date.now()}`,
-      title: draft.title,
+      title: draft.title || 'Academic Event',
       date: draft.isoDate,
-      startTime: draft.startTime,
-      endTime: draft.endTime,
-      category: draft.category as any,
-      color: draft.category === 'Examination' ? 'rose' : draft.category === 'Guest Lecture' ? 'forest' : 'blue',
-      venue: draft.venue,
+      startTime: draft.startTime || '09:00',
+      endTime: draft.endTime || (draft.startTime ? draft.startTime : '10:00'),
+      category,
+      color: category === 'Examination' ? 'rose' : category === 'Guest Lecture' ? 'forest' : 'blue',
+      venue: draft.venue || 'Campus',
       description: draft.summary,
-      sourceNoticeTitle: draft.title,
+      sourceNoticeTitle: draft.title || undefined,
       uncertainFlags: draft.uncertainFlags,
       isOfficial: false
     };
@@ -583,14 +593,14 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
 
   const handleUpdateExisting = () => {
     if (!duplicateWarningEvent || !extractedDraft) return;
-    const updated = calendarEvents.map(ev => {
+    const updated: CalendarEvent[] = calendarEvents.map(ev => {
       if (ev.id === duplicateWarningEvent.id) {
         return {
           ...ev,
-          startTime: extractedDraft.startTime,
-          endTime: extractedDraft.endTime,
-          venue: extractedDraft.venue,
-          description: extractedDraft.summary
+          startTime: extractedDraft.startTime || ev.startTime,
+          endTime: extractedDraft.endTime || ev.endTime,
+          venue: extractedDraft.venue || ev.venue,
+          description: extractedDraft.summary || ev.description
         };
       }
       return ev;
@@ -606,16 +616,21 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
   };
 
   const handleCreateDuplicate = () => {
-    if (!extractedDraft) return;
+    if (!extractedDraft || !extractedDraft.isoDate) return;
+    const category: CalendarEvent['category'] = 
+      (extractedDraft.category === 'Examination' || extractedDraft.category === 'Guest Lecture' || extractedDraft.category === 'Academic')
+        ? extractedDraft.category
+        : 'Academic';
+
     const newCalendarEvent: CalendarEvent = {
       id: `ev-copy-${Date.now()}`,
-      title: `${extractedDraft.title} (Copy)`,
+      title: `${extractedDraft.title || 'Event'} (Copy)`,
       date: extractedDraft.isoDate,
-      startTime: extractedDraft.startTime,
-      endTime: extractedDraft.endTime,
-      category: extractedDraft.category as any,
+      startTime: extractedDraft.startTime || '09:00',
+      endTime: extractedDraft.endTime || '10:00',
+      category,
       color: 'amber',
-      venue: extractedDraft.venue,
+      venue: extractedDraft.venue || 'Campus',
       description: extractedDraft.summary,
       isOfficial: false
     };
@@ -1008,6 +1023,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                 setSelectedCalendarDate(date);
                 handleTabChange('calendar');
               }}
+              onNavigateToDecodeNotice={() => handleTabChange('notices')}
             />
           </div>
         )}
@@ -1065,21 +1081,37 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                 </div>
 
                 {/* Drag & Drop File Area */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+
                 <div
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={handleDropFile}
-                  className={`p-5 rounded-2xl border-2 border-dashed transition-all text-center flex flex-col items-center justify-center gap-2 ${
+                  className={`p-6 rounded-2xl border-2 border-dashed transition-all text-center flex flex-col items-center justify-center gap-3 ${
                     uploadedFile
                       ? 'bg-[#F0FDF4]/50 border-[#86EFAC]'
                       : 'bg-[#F7F4E9]/40 border-[#E2DDD0] hover:border-[#172B4D]/40'
                   }`}
                 >
                   {uploadedFile ? (
-                    <div className="flex items-center justify-between w-full max-w-md bg-[#FFFDF7] p-3 rounded-xl border border-[#E2DDD0] shadow-2xs">
+                    <div className="flex items-center justify-between w-full max-w-md bg-[#FFFDF7] p-3.5 rounded-xl border border-[#E2DDD0] shadow-2xs">
                       <div className="flex items-center gap-2.5 truncate">
-                        <div className="w-8 h-8 rounded-lg bg-[#172B4D] text-[#D9A928] flex items-center justify-center shrink-0">
-                          <FileText className="w-4 h-4" />
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          aria-label="Replace circular document"
+                          title="Click to replace circular document"
+                          className="w-10 h-10 rounded-xl bg-[#172B4D] text-[#D9A928] hover:bg-[#244270] flex items-center justify-center shrink-0 cursor-pointer transition-colors shadow-2xs"
+                        >
+                          <FileText className="w-5 h-5" />
+                        </button>
                         <div className="text-left truncate">
                           <span className="font-mono text-xs font-bold text-[#172B4D] block truncate">
                             {uploadedFile.name}
@@ -1089,30 +1121,48 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                           </span>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setUploadedFile(null)}
-                        className="p-1 rounded text-[#D9574F] hover:bg-[#FFF0F0] cursor-pointer shrink-0"
-                        title="Remove file"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-2.5 py-1 rounded-lg text-xs font-mono text-[#172B4D] hover:bg-[#F7F4E9] border border-[#E2DDD0] cursor-pointer"
+                          title="Select a different document"
+                        >
+                          Replace
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUploadedFile(null);
+                            if (fileInputRef.current) fileInputRef.current.value = '';
+                          }}
+                          className="p-1.5 rounded-lg text-[#D9574F] hover:bg-[#FFF0F0] cursor-pointer"
+                          title="Remove file"
+                          aria-label="Remove uploaded file"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <>
-                      <div className="w-10 h-10 rounded-xl bg-[#F7F4E9] border border-[#E2DDD0] flex items-center justify-center text-[#172B4D]">
-                        <Upload className="w-5 h-5 text-[#D9A928]" />
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        aria-label="Upload circular document (PDF, JPG, JPEG, PNG)"
+                        title="Click to upload circular document"
+                        className="w-14 h-14 rounded-2xl bg-[#FFFDF7] border-2 border-[#E2DDD0] hover:border-[#172B4D] hover:bg-[#FAF8DB] flex items-center justify-center text-[#172B4D] cursor-pointer shadow-xs transition-all focus:outline-hidden focus:ring-2 focus:ring-[#172B4D] group"
+                      >
+                        <Upload className="w-6 h-6 text-[#D9A928] group-hover:scale-110 transition-transform" />
+                      </button>
                       <div>
-                        <label className="text-xs font-mono font-semibold text-[#172B4D] hover:underline cursor-pointer">
-                          <span>Click to upload circular document</span>
-                          <input
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            onChange={handleFileUpload}
-                            className="hidden"
-                          />
-                        </label>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="text-xs font-mono font-semibold text-[#172B4D] hover:underline cursor-pointer"
+                        >
+                          Click icon to upload circular document
+                        </button>
                         <span className="text-xs font-mono text-[#172B4D]/60"> or drag & drop</span>
                       </div>
                       <span className="text-[10px] font-mono text-[#172B4D]/50">
@@ -1128,25 +1178,6 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                     <span>{fileError}</span>
                   </div>
                 )}
-
-                {/* Quick Template Buttons */}
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <span className="text-[11px] font-mono text-[#172B4D]/60">1-Click Specimen:</span>
-                  {TEMPLATE_NOTICES.map((tmpl, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        setNoticeText(tmpl.text);
-                        setExtractedDraft(null);
-                        setUploadedFile(null);
-                      }}
-                      className="px-2.5 py-1 rounded bg-[#F7F4E9] hover:bg-[#E2DDD0]/40 border border-[#E2DDD0] text-[11px] font-mono text-[#172B4D] transition-colors cursor-pointer"
-                    >
-                      {tmpl.name}
-                    </button>
-                  ))}
-                </div>
 
                 {/* Text Area */}
                 <div>
@@ -1195,37 +1226,47 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                         </span>
                       </div>
                       <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#F7F4E9] border border-[#E2DDD0] text-[#172B4D]">
-                        {extractedDraft.category}
+                        {extractedDraft.category || 'Academic'}
                       </span>
                     </div>
 
                     {/* Event Title & Summary */}
                     <div className="mb-5">
                       <h3 className="text-lg font-serif font-bold text-[#172B4D]">
-                        {extractedDraft.title}
+                        {extractedDraft.title || 'Academic Notice'}
                       </h3>
                       <p className="mt-1 text-xs text-[#172B4D]/80 leading-relaxed font-sans">
-                        {extractedDraft.summary}
+                        {extractedDraft.summary || 'Summary not provided.'}
                       </p>
                     </div>
 
-                    {/* Metadata Grid */}
+                    {/* Metadata Grid: Always displays "Not specified" for missing fields */}
                     <div className="grid grid-cols-2 gap-3 mb-5 p-4 rounded-xl bg-[#F7F4E9]/60 border border-[#E2DDD0] text-xs font-mono">
                       <div>
-                        <span className="text-[10px] text-[#172B4D]/60 block uppercase">Scheduled Date</span>
-                        <span className="font-semibold text-[#172B4D]">{extractedDraft.date}</span>
+                        <span className="text-[10px] text-[#172B4D]/60 block uppercase font-semibold">Scheduled Date</span>
+                        <span className={`font-semibold ${extractedDraft.date ? 'text-[#172B4D]' : 'text-[#172B4D]/50 italic'}`}>
+                          {extractedDraft.date || 'Not specified'}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-[#172B4D]/60 block uppercase">Timing Window</span>
-                        <span className="font-semibold text-[#172B4D]">{extractedDraft.startTime} – {extractedDraft.endTime}</span>
+                        <span className="text-[10px] text-[#172B4D]/60 block uppercase font-semibold">Timing Window</span>
+                        <span className={`font-semibold ${extractedDraft.startTime ? 'text-[#172B4D]' : 'text-[#172B4D]/50 italic'}`}>
+                          {extractedDraft.startTime
+                            ? (extractedDraft.endTime ? `${extractedDraft.startTime} – ${extractedDraft.endTime}` : extractedDraft.startTime)
+                            : 'Not specified'}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-[#172B4D]/60 block uppercase">Venue</span>
-                        <span className="font-semibold text-[#172B4D] truncate block">{extractedDraft.venue}</span>
+                        <span className="text-[10px] text-[#172B4D]/60 block uppercase font-semibold">Venue</span>
+                        <span className={`font-semibold truncate block ${extractedDraft.venue ? 'text-[#172B4D]' : 'text-[#172B4D]/50 italic'}`}>
+                          {extractedDraft.venue || 'Not specified'}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-[#172B4D]/60 block uppercase">Student Action</span>
-                        <span className="font-semibold text-[#172B4D] truncate block">{extractedDraft.deadline}</span>
+                        <span className="text-[10px] text-[#172B4D]/60 block uppercase font-semibold">Student Action</span>
+                        <span className={`font-semibold truncate block ${extractedDraft.deadline ? 'text-[#172B4D]' : 'text-[#172B4D]/50 italic'}`}>
+                          {extractedDraft.deadline || 'Not specified'}
+                        </span>
                       </div>
                     </div>
 
@@ -1250,21 +1291,33 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                       </div>
                     )}
 
-                    {/* Actions */}
+                    {/* Actions: Disabled when date is missing */}
                     <div className="flex flex-col sm:flex-row items-center gap-3 pt-4 border-t border-[#E2DDD0]">
                       <button
                         type="button"
                         onClick={handleAddToCalendar}
-                        className="w-full sm:flex-1 py-2.5 px-4 rounded-lg bg-[#172B4D] text-[#FFFDF7] hover:bg-[#244270] transition-all font-mono text-xs font-semibold flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                        disabled={!extractedDraft.isoDate}
+                        className={`w-full sm:flex-1 py-2.5 px-4 rounded-lg font-mono text-xs font-semibold flex items-center justify-center gap-2 shadow-xs transition-all ${
+                          extractedDraft.isoDate
+                            ? 'bg-[#172B4D] text-[#FFFDF7] hover:bg-[#244270] cursor-pointer'
+                            : 'bg-[#172B4D]/30 text-[#FFFDF7]/60 cursor-not-allowed'
+                        }`}
+                        title={extractedDraft.isoDate ? 'Add event to your personal academic calendar' : 'Cannot add to calendar: Event date not specified'}
                       >
                         <CalendarIcon className="w-3.5 h-3.5 text-[#D9A928]" />
-                        <span>Add Directly to Academic Calendar</span>
+                        <span>{extractedDraft.isoDate ? 'Add Directly to Academic Calendar' : 'Event Date Not Specified'}</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => downloadNoticeIcs(extractedDraft)}
-                        className="w-full sm:w-auto py-2.5 px-4 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] transition-all font-mono text-xs flex items-center justify-center gap-2 cursor-pointer"
+                        disabled={!extractedDraft.date}
+                        className={`w-full sm:w-auto py-2.5 px-4 rounded-lg border font-mono text-xs flex items-center justify-center gap-2 transition-all ${
+                          extractedDraft.date
+                            ? 'bg-[#FFFDF7] border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer'
+                            : 'bg-[#FFFDF7]/40 border-[#E2DDD0]/50 text-[#172B4D]/40 cursor-not-allowed'
+                        }`}
+                        title={extractedDraft.date ? 'Export .ics calendar file' : 'Cannot export .ics: Event date not specified'}
                       >
                         <Download className="w-3.5 h-3.5 text-[#172B4D]/70" />
                         <span>Export .ics</span>
@@ -1280,7 +1333,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                       Ready for Notice Ingestion
                     </span>
                     <p className="text-xs font-mono text-[#172B4D]/60 max-w-sm">
-                      Upload a circular document or choose a sample circular on the left to extract academic entities.
+                      Upload a circular document (PDF, JPG, PNG) or paste notice text on the left to extract academic entities.
                     </p>
                   </div>
                 )}
@@ -1310,46 +1363,56 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
               </div>
 
               <div className="space-y-3">
-                {deadlines.map((dl) => (
-                  <div
-                    key={dl.id}
-                    onClick={() => handleToggleDeadline(dl.id)}
-                    className={`p-4 rounded-xl border transition-all flex items-start justify-between gap-4 cursor-pointer select-none ${
-                      dl.completed
-                        ? 'bg-[#F7F4E9]/40 border-[#E2DDD0] opacity-60'
-                        : dl.priority === 'high'
-                        ? 'bg-[#FFFDF7] border-l-4 border-l-[#D9574F] border-r border-t border-b border-[#E2DDD0] shadow-2xs'
-                        : 'bg-[#FFFDF7] border-[#E2DDD0] shadow-2xs'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={dl.completed}
-                        onChange={() => {}}
-                        className="mt-1 rounded border-[#E2DDD0] text-[#172B4D] focus:ring-0 cursor-pointer"
-                      />
-                      <div>
-                        <span className={`text-sm font-semibold block ${dl.completed ? 'line-through text-[#172B4D]/50' : 'text-[#172B4D]'}`}>
-                          {dl.title}
-                        </span>
-                        <p className="text-xs text-[#172B4D]/75 mt-0.5 leading-relaxed font-sans">
-                          {dl.action}
-                        </p>
-                        {dl.sourceNotice && (
-                          <span className="inline-block mt-2 text-[10px] font-mono px-2 py-0.5 rounded bg-[#F7F4E9] border border-[#E2DDD0] text-[#172B4D]/70">
-                            Source: {dl.sourceNotice}
+                {deadlines.length === 0 ? (
+                  <div className="py-12 px-6 rounded-xl bg-[#F7F4E9]/30 border border-dashed border-[#E2DDD0] text-center font-mono">
+                    <CheckSquare className="w-8 h-8 text-[#172B4D]/30 mx-auto mb-2" />
+                    <h4 className="font-serif font-bold text-base text-[#172B4D]">No action deadlines yet</h4>
+                    <p className="text-xs text-[#172B4D]/60 font-sans mt-1">
+                      When circulars with actionable requirements are decoded, their deadlines will be listed here.
+                    </p>
+                  </div>
+                ) : (
+                  deadlines.map((dl) => (
+                    <div
+                      key={dl.id}
+                      onClick={() => handleToggleDeadline(dl.id)}
+                      className={`p-4 rounded-xl border transition-all flex items-start justify-between gap-4 cursor-pointer select-none ${
+                        dl.completed
+                          ? 'bg-[#F7F4E9]/40 border-[#E2DDD0] opacity-60'
+                          : dl.priority === 'high'
+                          ? 'bg-[#FFFDF7] border-l-4 border-l-[#D9574F] border-r border-t border-b border-[#E2DDD0] shadow-2xs'
+                          : 'bg-[#FFFDF7] border-[#E2DDD0] shadow-2xs'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={dl.completed}
+                          onChange={() => {}}
+                          className="mt-1 rounded border-[#E2DDD0] text-[#172B4D] focus:ring-0 cursor-pointer"
+                        />
+                        <div>
+                          <span className={`text-sm font-semibold block ${dl.completed ? 'line-through text-[#172B4D]/50' : 'text-[#172B4D]'}`}>
+                            {dl.title}
                           </span>
-                        )}
+                          <p className="text-xs text-[#172B4D]/75 mt-0.5 leading-relaxed font-sans">
+                            {dl.action}
+                          </p>
+                          {dl.sourceNotice && (
+                            <span className="inline-block mt-2 text-[10px] font-mono px-2 py-0.5 rounded bg-[#F7F4E9] border border-[#E2DDD0] text-[#172B4D]/70">
+                              Source: {dl.sourceNotice}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0 font-mono text-xs">
+                        <span className="block font-semibold text-[#172B4D]">{dl.dueDate}</span>
+                        <span className="text-[11px] text-[#D9A928] block">{dl.dueTime}</span>
                       </div>
                     </div>
-
-                    <div className="text-right shrink-0 font-mono text-xs">
-                      <span className="block font-semibold text-[#172B4D]">{dl.dueDate}</span>
-                      <span className="text-[11px] text-[#D9A928] block">{dl.dueTime}</span>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>

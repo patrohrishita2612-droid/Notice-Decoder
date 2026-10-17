@@ -15,7 +15,7 @@ export const Footer: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-6 text-[#FFFDF7]/70">
           <a href="#how-it-works" className="hover:text-[#D9A928] transition-colors">Architecture</a>
-          <a href="#sample-notice" className="hover:text-[#D9A928] transition-colors">Specimen</a>
+          <a href="#login" className="hover:text-[#D9A928] transition-colors">Sign In</a>
           <a href="#calendar" className="hover:text-[#D9A928] transition-colors">Smart Calendar</a>
           <a href="#conflicts" className="hover:text-[#D9A928] transition-colors">Conflict Engine</a>
           <a href="#portals" className="hover:text-[#D9A928] transition-colors">Portals</a>

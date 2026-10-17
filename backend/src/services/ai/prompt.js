@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Prompt generation for AI Notice Processing
  * Strictly enforces non-hallucination, preserving ambiguity, student-friendly tone,
  * intelligent title & urgency inference, and exact JSON formatting.
@@ -34,7 +34,9 @@ CRITICAL RULES AND CONSTRAINTS:
 8. SUMMARY:
    - Provide a concise, clear 1-3 sentence summary written in simple, student-friendly English explaining what is happening, who needs to care, and what to do next.
 9. OUTPUT FORMAT:
-   - Respond ONLY with a valid JSON object matching the requested schema. Do not include markdown preamble or conversational explanations.`;
+   - Respond ONLY with a valid JSON object matching the requested schema. Do not include markdown preamble or conversational explanations.
+10. INVALID OR INSUFFICIENT INPUTS:
+   - If the input text is meaningless (e.g. 'hiiii', greetings, gibberish), lacks recognizable academic notice content, or does not contain an announcement or event, return null for title, event_date, start_time, end_time, venue, deadline, target_audience, set summary to 'Not enough information to extract a notice. Please upload a valid notice or enter more details.', and add that same message to missing_information.`;
 
 /**
  * Builds the user prompt containing the notice text and JSON schema specification.

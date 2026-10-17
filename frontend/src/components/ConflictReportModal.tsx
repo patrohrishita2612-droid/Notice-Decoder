@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, AlertTriangle, Clock, Calendar, CheckCircle2, Send, ShieldAlert } from 'lucide-react';
 import { CalendarEvent } from './PersonalAcademicCalendar';
 import { ConflictRequest } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface ConflictReportModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ export const ConflictReportModal: React.FC<ConflictReportModalProps> = ({
   onSubmitConflict,
   existingRequest
 }) => {
+  const { user } = useAuth();
   if (!isOpen) return null;
 
   const [studentReason, setStudentReason] = useState(
@@ -46,9 +48,9 @@ export const ConflictReportModal: React.FC<ConflictReportModalProps> = ({
       onSubmitConflict({
         eventId: officialEvent.id,
         eventTitle: officialEvent.title,
-        studentId: 'user-default-1',
-        studentName: 'Kavya Rane',
-        studentEmail: 'kavya@campus.edu',
+        studentId: user?.id || 'student-user',
+        studentName: user?.name || 'Enrolled Student',
+        studentEmail: user?.email || '',
         conflictingCommitmentTitle: conflictingEvent?.title || 'Personal Academic Commitment',
         overlapMinutes: overlapMinutes,
         studentReason: studentReason.trim(),

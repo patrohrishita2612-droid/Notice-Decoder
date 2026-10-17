@@ -1,26 +1,27 @@
 export interface ExtractedNotice {
   id: string;
-  title: string;
+  title: string | null;
   rawText: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  venue: string;
-  deadline: string;
-  deadlineAction: string;
+  date: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  venue: string | null;
+  deadline: string | null;
+  deadlineAction: string | null;
   summary: string;
-  audience: string;
-  category: 'Examination' | 'Academic' | 'Guest Lecture' | 'Administrative';
+  audience: string | null;
+  category: 'Examination' | 'Academic' | 'Guest Lecture' | 'Administrative' | null;
   uncertainFlags?: {
     field: string;
     reason: string;
     suggestion: string;
   }[];
-  urgency: 'high' | 'medium' | 'normal';
+  urgency: 'high' | 'medium' | 'normal' | 'unknown';
   fileName?: string;
   fileType?: string;
   fileSize?: number;
-  issuingDepartment?: string;
+  issuingDepartment?: string | null;
+  isoDate?: string | null;
 }
 
 export interface OfficialNotice {
@@ -28,11 +29,11 @@ export interface OfficialNotice {
   title: string;
   originalText: string;
   summary: string;
-  date: string;
-  time: string;
-  venue: string;
+  date: string | null;
+  time: string | null;
+  venue: string | null;
   targetAudience: string; // e.g. 'All Students', 'CS-302 CSA', 'CS-302 CSB', 'Year 3 Computer Science', 'Faculty Only'
-  requiredAction?: string;
+  requiredAction?: string | null;
   issuingDepartment: string;
   authorId: string;
   publishedBy: string;

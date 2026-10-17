@@ -5,6 +5,7 @@ export interface User {
   name: string;
   email: string;
   institution?: string;
+  department?: string;
   authProvider?: 'email' | 'google' | 'github';
   role?: 'student' | 'professor' | 'admin';
 }
@@ -51,36 +52,47 @@ const SESSION_LOCAL_KEY = 'notice_decoder_session_local_v1';
 const SESSION_SESSION_KEY = 'notice_decoder_session_temp_v1';
 const SYNC_QUEUE_PREFIX = 'notice_decoder_sync_queue';
 
-// Seed accounts for easy testing
-const SEED_USERS: StoredUserRecord[] = [
-  {
-    id: 'user-default-1',
-    name: 'Kavya Rane',
-    email: 'kavya@campus.edu',
-    institution: 'Department of Computer Engineering',
-    role: 'student',
-    passwordHash: 'password123',
-    createdAt: new Date().toISOString(),
-    authProvider: 'email'
-  },
-  {
-    id: 'user-default-2',
-    name: 'Student Demo',
+// Demo logins configuration: enabled in dev or when explicitly configured
+export const ALLOW_DEMO_LOGINS = import.meta.env.DEV || import.meta.env.VITE_ALLOW_DEMO_LOGINS === 'true';
+
+export const DEMO_CREDENTIALS = {
+  student: {
+    name: 'Student Demo (Kavya Rane)',
     email: 'student@campus.edu',
-    institution: 'Engineering Faculty',
-    role: 'student',
-    passwordHash: 'campus2026',
-    createdAt: new Date().toISOString(),
-    authProvider: 'email'
+    password: 'campus2026',
+    role: 'student' as const,
+    institution: 'Department of Computer Engineering'
   },
-  {
-    id: 'user-default-prof',
+  professor: {
     name: 'Dr. Evelyn Reed',
     email: 'professor@campus.edu',
+    password: 'prof2026',
+    role: 'professor' as const,
     institution: 'Department of Computer Science & Engineering',
+    department: 'Department of Computer Science & Engineering'
+  }
+};
+
+const DEMO_ACCOUNTS: StoredUserRecord[] = [
+  {
+    id: 'user-demo-student',
+    name: DEMO_CREDENTIALS.student.name,
+    email: DEMO_CREDENTIALS.student.email,
+    institution: DEMO_CREDENTIALS.student.institution,
+    role: 'student',
+    passwordHash: DEMO_CREDENTIALS.student.password,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    authProvider: 'email'
+  },
+  {
+    id: 'user-demo-professor',
+    name: DEMO_CREDENTIALS.professor.name,
+    email: DEMO_CREDENTIALS.professor.email,
+    institution: DEMO_CREDENTIALS.professor.institution,
+    department: DEMO_CREDENTIALS.professor.department,
     role: 'professor',
-    passwordHash: 'prof2026',
-    createdAt: new Date().toISOString(),
+    passwordHash: DEMO_CREDENTIALS.professor.password,
+    createdAt: '2026-01-01T00:00:00.000Z',
     authProvider: 'email'
   }
 ];
@@ -137,26 +149,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initialize and check existing session on mount
   useEffect(() => {
-    // Ensure initial registry has seed users and merges newly added seed accounts
-    const rawUsers = localStorage.getItem(USERS_STORAGE_KEY);
-    if (!rawUsers) {
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(SEED_USERS));
-    } else {
-      try {
-        const parsed: StoredUserRecord[] = JSON.parse(rawUsers);
-        let updated = false;
-        for (const seed of SEED_USERS) {
-          if (!parsed.some(u => u.email.toLowerCase() === seed.email.toLowerCase())) {
-            parsed.push(seed);
-            updated = true;
+    try {
+      const rawUsers = localStorage.getItem(USERS_STORAGE_KEY);
+      let users: StoredUserRecord[] = rawUsers ? JSON.parse(rawUsers) : [];
+
+      if (ALLOW_DEMO_LOGINS) {
+        // Ensure student & professor demo accounts exist in registry
+        for (const demo of DEMO_ACCOUNTS) {
+          const idx = users.findIndex(u => u.email.toLowerCase() === demo.email.toLowerCase());
+          if (idx >= 0) {
+            users[idx] = { ...users[idx], ...demo };
+          } else {
+            users.push(demo);
           }
         }
-        if (updated) {
-          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsed));
-        }
-      } catch {
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(SEED_USERS));
+      } else {
+        // In production, keep demo accounts purged unless explicitly allowed
+        users = users.filter(
+          u => u.email.toLowerCase() !== DEMO_CREDENTIALS.student.email && u.email.toLowerCase() !== DEMO_CREDENTIALS.professor.email
+        );
       }
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+    } catch {
+      // Storage error
     }
 
     // Check persistent session in localStorage first, then sessionStorage
@@ -168,8 +183,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (rawSession) {
       try {
         const session: AuthSession = JSON.parse(rawSession);
-        // Verify session validity and token freshness
-        if (session.expiresAt > Date.now() && session.user && session.token) {
+        const isDemo = session.user && (
+          session.user.email.toLowerCase() === DEMO_CREDENTIALS.student.email ||
+          session.user.email.toLowerCase() === DEMO_CREDENTIALS.professor.email
+        );
+
+        if (isDemo && !ALLOW_DEMO_LOGINS) {
+          localStorage.removeItem(SESSION_LOCAL_KEY);
+          sessionStorage.removeItem(SESSION_SESSION_KEY);
+          setUser(null);
+        } else if (session.expiresAt > Date.now() && session.user && session.token) {
           // Valid authenticated session verified
           setUser(session.user);
         } else {
@@ -196,9 +219,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const getUsersRegistry = (): StoredUserRecord[] => {
     try {
       const raw = localStorage.getItem(USERS_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : SEED_USERS;
+      const list: StoredUserRecord[] = raw ? JSON.parse(raw) : [];
+      if (ALLOW_DEMO_LOGINS) {
+        for (const demo of DEMO_ACCOUNTS) {
+          if (!list.some(u => u.email.toLowerCase() === demo.email.toLowerCase())) {
+            list.push(demo);
+          }
+        }
+      }
+      return list;
     } catch {
-      return SEED_USERS;
+      return ALLOW_DEMO_LOGINS ? DEMO_ACCOUNTS : [];
     }
   };
 
