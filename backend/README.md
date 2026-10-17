@@ -107,9 +107,13 @@ ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow public read notices" ON notices FOR SELECT USING (true);
 CREATE POLICY "Allow public insert notices" ON notices FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update notices" ON notices FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public delete notices" ON notices FOR DELETE USING (true);
 
 CREATE POLICY "Allow public read events" ON events FOR SELECT USING (true);
 CREATE POLICY "Allow public insert events" ON events FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update events" ON events FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public delete events" ON events FOR DELETE USING (true);
 ```
 
 4. Retrieve your **Project URL** and **anon public API Key** from **Project Settings -> API** and add them to `.env`.
@@ -241,6 +245,62 @@ You can test all endpoints directly with Postman without needing the frontend.
   "error": "Notice text is required."
 }
 ```
+
+---
+
+### Test 6: Update an Existing Notice
+* **Method:** `PUT`
+* **URL:** `http://localhost:5000/api/notices/1`
+* **Headers:** `Content-Type: application/json`
+* **Option A (Update individual fields):**
+```json
+{
+  "venue": "Room 305 (Main Block)",
+  "time": "11:00 AM"
+}
+```
+* **Option B (Update notice text & re-extract):**
+```json
+{
+  "text": "The workshop is rescheduled to 28 October 2026 at 11 AM in Room 305. All students must attend."
+}
+```
+* **Expected Response:** `200 OK`
+```json
+{
+  "message": "Notice updated successfully.",
+  "notice": {
+    "id": 1,
+    "original_text": "...",
+    "summary": "...",
+    "date": "...",
+    "time": "...",
+    "venue": "Room 305 (Main Block)",
+    "target_audience": "...",
+    "required_action": "...",
+    "created_at": "..."
+  }
+}
+```
+*(If ID does not exist, returns `404 Not Found` with `{ "error": "Notice not found." }`)*
+
+---
+
+### Test 7: Delete a Notice
+* **Method:** `DELETE`
+* **URL:** `http://localhost:5000/api/notices/1`
+* **Expected Response:** `200 OK`
+```json
+{
+  "message": "Notice deleted successfully.",
+  "deletedNotice": {
+    "id": 1,
+    "original_text": "...",
+    "summary": "..."
+  }
+}
+```
+*(If ID does not exist, returns `404 Not Found` with `{ "error": "Notice not found." }`)*
 
 ---
 
