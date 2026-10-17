@@ -180,9 +180,19 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
   // Selected date state (defaults to 2026-11-13 to showcase the prototype overlap specimen)
   const [internalSelectedDate, setInternalSelectedDate] = useState<string>('2026-11-13');
   const selectedDate = propSelectedDate || internalSelectedDate;
+  
   const setSelectedDate = (d: string) => {
     setInternalSelectedDate(d);
     onSelectDate?.(d);
+    // Keep month in view if selecting a date in a different month
+    const parts = d.split('-').map(Number);
+    if (parts.length === 3) {
+      const dYear = parts[0];
+      const dMonth = parts[1] - 1;
+      if (dYear !== viewDate.getFullYear() || dMonth !== viewDate.getMonth()) {
+        setViewDate(new Date(dYear, dMonth, 1));
+      }
+    }
   };
 
   // Current calendar view month and year
@@ -194,7 +204,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth(); // 0-indexed
 
-  // Navigation handlers
+  // Month navigation handlers
   const handlePrevMonth = () => {
     setViewDate(new Date(year, month - 1, 1));
   };
@@ -204,21 +214,45 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
   };
 
   const handleToday = () => {
-    // Default to November 2026 if today is far off, or current date
     const targetDateStr = '2026-11-13';
     setSelectedDate(targetDateStr);
     setViewDate(new Date(2026, 10, 1));
   };
 
+  // Day navigation handlers (Previous Day / Next Day)
+  const handlePrevDay = () => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const prev = new Date(y, m - 1, d - 1);
+    const newDateStr = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(prev.getDate()).padStart(2, '0')}`;
+    setSelectedDate(newDateStr);
+  };
+
+  const handleNextDay = () => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const next = new Date(y, m - 1, d + 1);
+    const newDateStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+    setSelectedDate(newDateStr);
+  };
+
+  // Interactive Popover for +N More Events
+  const [morePopoverDate, setMorePopoverDate] = useState<string | null>(null);
+
   // Event modal/editor state
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+
+  // Delete confirmation modal state
+  const [eventToDelete, setEventToDelete] = useState<CalendarEvent | null>(null);
+
+  // Selected event on timeline for rescheduling controls
+  const [selectedTimelineEventId, setSelectedTimelineEventId] = useState<string>('ev-1');
 
   // Form fields
   const [formTitle, setFormTitle] = useState('');
   const [formDate, setFormDate] = useState(selectedDate);
   const [formStartTime, setFormStartTime] = useState('09:30');
   const [formEndTime, setFormEndTime] = useState('10:30');
+  const [formIsAllDay, setFormIsAllDay] = useState(false);
   const [formCategory, setFormCategory] = useState<CalendarEvent['category']>('Meeting');
   const [formColor, setFormColor] = useState<CalendarEvent['color']>('cyan');
   const [formVenue, setFormVenue] = useState('Seminar Hall B');
@@ -226,20 +260,171 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
   const [formReminder, setFormReminder] = useState<number>(15);
   const [formError, setFormError] = useState('');
 
-  // Open Add Event modal
-  const handleOpenAddEvent = (targetDate?: string) => {
+  // Group events by date for fast grid lookup
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    events.forEach(ev => {
+      const list = map.get(ev.date) || [];
+      list.push(ev);
+      map.set(ev.date, list);
+    });
+    return map;
+  }, [events]);
+
+  // Selected date's events, sorted chronologically
+  const selectedDateEvents = useMemo(() => {
+    const list = eventsByDate.get(selectedDate) || [];
+    return [...list].sort((a, b) => {
+      if (a.isAllDay && !b.isAllDay) return -1;
+      if (!a.isAllDay && b.isAllDay) return 1;
+      return parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime);
+    });
+  }, [selectedDate, eventsByDate]);
+
+  // Conflict detection per date
+  const conflictsByDate = useMemo(() => {
+    const clashMap = new Map<string, {
+      hasConflict: boolean;
+      overlapMinutes: number;
+      overlapStart: number;
+      overlapEnd: number;
+      pair: [CalendarEvent, CalendarEvent];
+      description: string;
+      suggestedSlot?: { start: string; end: string };
+    }>();
+
+    eventsByDate.forEach((dayEvents, dateKey) => {
+      const timed = dayEvents.filter(e => !e.isAllDay);
+      const sorted = [...timed].sort((a, b) => parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime));
+      for (let i = 0; i < sorted.length; i++) {
+        for (let j = i + 1; j < sorted.length; j++) {
+          const a = sorted[i];
+          const b = sorted[j];
+          const aStart = parseTimeToMinutes(a.startTime);
+          const aEnd = parseTimeToMinutes(a.endTime);
+          const bStart = parseTimeToMinutes(b.startTime);
+          const bEnd = parseTimeToMinutes(b.endTime);
+
+          const overlapStart = Math.max(aStart, bStart);
+          const overlapEnd = Math.min(aEnd, bEnd);
+
+          if (overlapEnd > overlapStart) {
+            const overlapM = overlapEnd - overlapStart;
+            // Suggest free slot after the second event
+            const durationA = aEnd - aStart;
+            const freeStartM = Math.max(aEnd, bEnd);
+            const freeEndM = freeStartM + durationA;
+            const suggestedStart = formatMinutes24(freeStartM);
+            const suggestedEnd = formatMinutes24(freeEndM);
+
+            clashMap.set(dateKey, {
+              hasConflict: true,
+              overlapMinutes: overlapM,
+              overlapStart,
+              overlapEnd,
+              pair: [a, b],
+              description: `${overlapM} min overlap: "${a.title}" (${a.startTime}–${a.endTime}) overlaps with "${b.title}" (${b.startTime}–${b.endTime})`,
+              suggestedSlot: { start: suggestedStart, end: suggestedEnd }
+            });
+            break;
+          }
+        }
+      }
+    });
+
+    return clashMap;
+  }, [eventsByDate]);
+
+  const selectedDateConflict = conflictsByDate.get(selectedDate);
+
+  // Dynamic Scale & Ticks for Daily Timeline of Selected Date
+  const timelineData = useMemo(() => {
+    const timed = selectedDateEvents.filter(e => !e.isAllDay);
+    const starts = timed.map(e => parseTimeToMinutes(e.startTime));
+    const ends = timed.map(e => parseTimeToMinutes(e.endTime));
+
+    const minM = starts.length > 0 ? Math.min(...starts) : 540;
+    const maxM = ends.length > 0 ? Math.max(...ends) : 690;
+
+    // Floor to nearest 30 mins, minimum 9:00 AM (540 mins)
+    const baseMin = Math.min(540, Math.floor(minM / 30) * 30);
+    // Ceil to nearest 30 mins, maximum 12:00 PM (720 mins) or whatever fits the events
+    const baseMax = Math.max(690, Math.ceil(maxM / 30) * 30);
+
+    const span = Math.max(60, baseMax - baseMin);
+
+    // Generate ticks every 30 mins
+    const tickList: { minute: number; label: string; pct: number }[] = [];
+    for (let m = baseMin; m <= baseMax; m += 30) {
+      tickList.push({
+        minute: m,
+        label: formatMinutes24(m),
+        pct: ((m - baseMin) / span) * 100
+      });
+    }
+
+    // Map each timed event
+    const mapped = timed.map(ev => {
+      const s = parseTimeToMinutes(ev.startTime);
+      const e = parseTimeToMinutes(ev.endTime);
+      const leftPct = Math.max(0, Math.min(100, ((s - baseMin) / span) * 100));
+      const widthPct = Math.max(4, Math.min(100 - leftPct, ((e - s) / span) * 100));
+
+      return {
+        ...ev,
+        startM: s,
+        endM: e,
+        leftPct,
+        widthPct,
+        label: `${ev.title} ${ev.startTime}–${ev.endTime}`
+      };
+    });
+
+    // Marker calculations
+    let marker1Pct = 0;
+    let marker2Pct = 0;
+    let overlapLeftPct = 0;
+    let overlapWidthPct = 0;
+
+    if (selectedDateConflict?.hasConflict) {
+      marker1Pct = ((selectedDateConflict.overlapStart - baseMin) / span) * 100;
+      marker2Pct = ((selectedDateConflict.overlapEnd - baseMin) / span) * 100;
+      overlapLeftPct = Math.min(marker1Pct, marker2Pct);
+      overlapWidthPct = Math.abs(marker2Pct - marker1Pct);
+    }
+
+    return {
+      baseMin,
+      baseMax,
+      span,
+      ticks: tickList,
+      mappedEvents: mapped,
+      marker1Pct,
+      marker2Pct,
+      overlapLeftPct,
+      overlapWidthPct
+    };
+  }, [selectedDateEvents, selectedDateConflict]);
+
+  // Selected timeline event object
+  const selectedTimelineEvent = selectedDateEvents.find(e => e.id === selectedTimelineEventId) || selectedDateEvents[0];
+
+  // Open Add Event modal (with optional prefilled time)
+  const handleOpenAddEvent = (targetDate?: string, startTime?: string, endTime?: string) => {
     setEditingEventId(null);
     setFormTitle('');
     setFormDate(targetDate || selectedDate);
-    setFormStartTime('11:00');
-    setFormEndTime('12:00');
+    setFormStartTime(startTime || '11:00');
+    setFormEndTime(endTime || '12:00');
+    setFormIsAllDay(false);
     setFormCategory('Meeting');
     setFormColor('cyan');
-    setFormVenue('Main Campus Hall');
+    setFormVenue('Seminar Hall B');
     setFormDescription('');
     setFormReminder(15);
     setFormError('');
     setIsEditorOpen(true);
+    setMorePopoverDate(null);
   };
 
   // Open Edit Event modal
@@ -249,6 +434,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
     setFormDate(ev.date);
     setFormStartTime(ev.startTime);
     setFormEndTime(ev.endTime);
+    setFormIsAllDay(!!ev.isAllDay);
     setFormCategory(ev.category);
     setFormColor(ev.color);
     setFormVenue(ev.venue || '');
@@ -256,15 +442,23 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
     setFormReminder(ev.reminderMinutes || 15);
     setFormError('');
     setIsEditorOpen(true);
+    setMorePopoverDate(null);
   };
 
-  // Delete event
-  const handleDeleteEvent = (id: string) => {
-    const updated = events.filter(e => e.id !== id);
+  // Prompt delete confirmation
+  const handlePromptDelete = (ev: CalendarEvent) => {
+    setEventToDelete(ev);
+  };
+
+  // Confirm delete
+  const handleConfirmDelete = () => {
+    if (!eventToDelete) return;
+    const updated = events.filter(e => e.id !== eventToDelete.id);
     updateEvents(updated);
-    if (editingEventId === id) {
+    if (editingEventId === eventToDelete.id) {
       setIsEditorOpen(false);
     }
+    setEventToDelete(null);
   };
 
   // Save event (Create or Update)
@@ -277,24 +471,27 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
       return;
     }
 
-    const s = parseTimeToMinutes(formStartTime);
-    const en = parseTimeToMinutes(formEndTime);
+    if (!formIsAllDay) {
+      const s = parseTimeToMinutes(formStartTime);
+      const en = parseTimeToMinutes(formEndTime);
 
-    if (en <= s) {
-      setFormError('End time must be after start time.');
-      return;
+      if (en <= s) {
+        setFormError('End time must be after start time.');
+        return;
+      }
     }
 
     if (editingEventId) {
-      // Update existing
+      // Update existing event
       const updated = events.map(ev => {
         if (ev.id === editingEventId) {
           return {
             ...ev,
             title: formTitle.trim(),
             date: formDate,
-            startTime: formStartTime,
-            endTime: formEndTime,
+            startTime: formIsAllDay ? '00:00' : formStartTime,
+            endTime: formIsAllDay ? '23:59' : formEndTime,
+            isAllDay: formIsAllDay,
             category: formCategory,
             color: formColor,
             venue: formVenue.trim() || undefined,
@@ -306,13 +503,14 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
       });
       updateEvents(updated);
     } else {
-      // Create new
+      // Create new event
       const newEv: CalendarEvent = {
         id: `ev-${Date.now()}`,
         title: formTitle.trim(),
         date: formDate,
-        startTime: formStartTime,
-        endTime: formEndTime,
+        startTime: formIsAllDay ? '00:00' : formStartTime,
+        endTime: formIsAllDay ? '23:59' : formEndTime,
+        isAllDay: formIsAllDay,
         category: formCategory,
         color: formColor,
         venue: formVenue.trim() || undefined,
@@ -324,6 +522,34 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
     }
 
     setIsEditorOpen(false);
+  };
+
+  // Shift selected event on daily timeline
+  const handleShiftTimelineEvent = (deltaMinutes: number) => {
+    if (!selectedTimelineEvent || selectedTimelineEvent.isAllDay) return;
+
+    const s = parseTimeToMinutes(selectedTimelineEvent.startTime);
+    const e = parseTimeToMinutes(selectedTimelineEvent.endTime);
+    const duration = e - s;
+
+    let newS = s + deltaMinutes;
+    if (newS < 480) newS = 480; // 08:00 AM minimum
+    if (newS + duration > 1200) newS = 1200 - duration; // 20:00 PM max
+
+    const newE = newS + duration;
+
+    const updated = events.map(ev => {
+      if (ev.id === selectedTimelineEvent.id) {
+        return {
+          ...ev,
+          startTime: formatMinutes24(newS),
+          endTime: formatMinutes24(newE)
+        };
+      }
+      return ev;
+    });
+
+    updateEvents(updated);
   };
 
   // Quick conflict resolver: shift conflicting event to recommended slot
@@ -360,72 +586,13 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
     });
   };
 
-  // Group events by date for fast grid lookup
-  const eventsByDate = useMemo(() => {
-    const map = new Map<string, CalendarEvent[]>();
-    events.forEach(ev => {
-      const list = map.get(ev.date) || [];
-      list.push(ev);
-      map.set(ev.date, list);
-    });
-    return map;
-  }, [events]);
-
-  // Conflict detection per date
-  const conflictsByDate = useMemo(() => {
-    const clashMap = new Map<string, {
-      hasConflict: boolean;
-      overlapMinutes: number;
-      pair: [CalendarEvent, CalendarEvent];
-      description: string;
-      suggestedSlot?: { start: string; end: string };
-    }>();
-
-    eventsByDate.forEach((dayEvents, dateKey) => {
-      // Sort chronologically
-      const sorted = [...dayEvents].sort((a, b) => parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime));
-      for (let i = 0; i < sorted.length; i++) {
-        for (let j = i + 1; j < sorted.length; j++) {
-          const a = sorted[i];
-          const b = sorted[j];
-          const aStart = parseTimeToMinutes(a.startTime);
-          const aEnd = parseTimeToMinutes(a.endTime);
-          const bStart = parseTimeToMinutes(b.startTime);
-          const bEnd = parseTimeToMinutes(b.endTime);
-
-          const overlapStart = Math.max(aStart, bStart);
-          const overlapEnd = Math.min(aEnd, bEnd);
-
-          if (overlapEnd > overlapStart) {
-            const overlapM = overlapEnd - overlapStart;
-            // Suggest free slot after the second event
-            const suggestedStart = formatMinutes24(Math.max(aEnd, bEnd));
-            const durationA = aEnd - aStart;
-            const suggestedEnd = formatMinutes24(Math.max(aEnd, bEnd) + durationA);
-
-            clashMap.set(dateKey, {
-              hasConflict: true,
-              overlapMinutes: overlapM,
-              pair: [a, b],
-              description: `${overlapM} min overlap: ${a.title} (${a.startTime}–${a.endTime}) overlaps with ${b.title} (${b.startTime}–${b.endTime})`,
-              suggestedSlot: { start: suggestedStart, end: suggestedEnd }
-            });
-            break;
-          }
-        }
-      }
-    });
-
-    return clashMap;
-  }, [eventsByDate]);
-
   // Build the 42 cells (6 rows x 7 days) for conventional monthly grid
   const monthGridDays = useMemo(() => {
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
 
     const totalDaysInMonth = lastDay.getDate();
-    // In JS: 0 = Sun, 1 = Mon ... 6 = Sat. We want Monday as day 0:
+    // Monday as day 0:
     const startDayOfWeek = (firstDay.getDay() + 6) % 7;
 
     const days: {
@@ -456,21 +623,21 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
       });
     }
 
-    // Days in current month
+    // Days in current month (handles leap years properly)
     for (let d = 1; d <= totalDaysInMonth; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       days.push({
         dateStr,
         dayNumber: d,
         isCurrentMonth: true,
-        isToday: dateStr === '2026-11-13', // Target demo date or real date
+        isToday: dateStr === '2026-11-13',
         isSelected: dateStr === selectedDate,
         dayEvents: eventsByDate.get(dateStr) || [],
         conflict: conflictsByDate.get(dateStr)
       });
     }
 
-    // Leading days from next month to complete grid (up to 35 or 42 cells)
+    // Leading days from next month
     const remaining = (7 - (days.length % 7)) % 7;
     const totalNeeded = days.length + remaining < 35 ? 35 : days.length + remaining;
     const additional = totalNeeded - days.length;
@@ -493,18 +660,6 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
     return days;
   }, [year, month, selectedDate, eventsByDate, conflictsByDate]);
 
-  // Selected date's events, sorted chronologically
-  const selectedDateEvents = useMemo(() => {
-    const list = eventsByDate.get(selectedDate) || [];
-    return [...list].sort((a, b) => {
-      if (a.isAllDay && !b.isAllDay) return -1;
-      if (!a.isAllDay && b.isAllDay) return 1;
-      return parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime);
-    });
-  }, [selectedDate, eventsByDate]);
-
-  const selectedDateConflict = conflictsByDate.get(selectedDate);
-
   // Formatted date string for selected date agenda header
   const formattedSelectedHeader = useMemo(() => {
     try {
@@ -522,27 +677,40 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
   }, [selectedDate]);
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-8">
       
       {/* ============================================================ */}
-      {/* 1. TOP CALENDAR CONTROLS & MONTH NAVIGATION                  */}
+      {/* 1. TOP CALENDAR CONTROLS & MONTH/YEAR NAVIGATION             */}
       {/* ============================================================ */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-[#E8E5BA]">
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-[#E8E5BA]">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-[#172D50] text-[#F2EE98] flex items-center justify-center font-bold shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-[#172D50] text-[#F2EE98] flex items-center justify-center font-bold shadow-xs">
             <CalendarIcon className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#172D50]">
-              {MONTH_NAMES[month]} {year}
+            <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#172D50] flex items-center gap-2">
+              <span>{MONTH_NAMES[month]} {year}</span>
             </h2>
             <span className="text-xs font-mono text-[#172D50]/60">
-              Academic Term Schedule · {events.length} Active Events
+              Personal Academic Calendar · {events.length} Synchronized Events
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Date Picker Input */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono">
+            <span className="text-[#172D50]/60 hidden sm:inline">Jump to:</span>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                if (e.target.value) setSelectedDate(e.target.value);
+              }}
+              className="bg-transparent text-[#172D50] font-semibold focus:outline-hidden cursor-pointer"
+            />
+          </div>
+
           {/* Today Button */}
           <button
             type="button"
@@ -559,6 +727,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
               onClick={handlePrevMonth}
               aria-label="Previous Month"
               className="p-1.5 rounded text-[#172D50]/70 hover:text-[#172D50] hover:bg-[#FEFDE6] transition-colors cursor-pointer"
+              title="Previous Month"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -567,6 +736,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
               onClick={handleNextMonth}
               aria-label="Next Month"
               className="p-1.5 rounded text-[#172D50]/70 hover:text-[#172D50] hover:bg-[#FEFDE6] transition-colors cursor-pointer"
+              title="Next Month"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -586,8 +756,8 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
           <button
             type="button"
             onClick={handleExportFullCalendar}
-            title="Export all events to .ics"
-            className="p-1.5 rounded-lg bg-[#FAF8DB] hover:bg-[#F2EE98]/40 border border-[#E8E5BA] text-[#172D50] transition-colors cursor-pointer"
+            title="Export calendar schedule to .ics"
+            className="p-2 rounded-lg bg-[#FAF8DB] hover:bg-[#F2EE98]/40 border border-[#E8E5BA] text-[#172D50] transition-colors cursor-pointer"
           >
             <Download className="w-4 h-4" />
           </button>
@@ -595,9 +765,263 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
       </div>
 
       {/* ============================================================ */}
-      {/* SECTION A: MONTHLY CALENDAR GRID                             */}
+      {/* 2. SECTION: INTERACTIVE DAILY TIMELINE (Selected Date)       */}
       {/* ============================================================ */}
-      <div className="bg-[#FAF8DB]/90 border border-[#E8E5BA] rounded-2xl p-4 sm:p-6 shadow-xs overflow-hidden">
+      <div className="bg-[#FAF8DB]/90 border border-[#E8E5BA] rounded-2xl p-6 sm:p-8 shadow-xs relative overflow-hidden transition-all">
+        
+        {/* Daily Timeline Controls Header */}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-3 border-b border-[#E8E5BA]/70">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-2 h-2 rounded-full bg-[#10380B] animate-pulse"></span>
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#10380B]">
+                Daily Timeline View
+              </span>
+              <span className="text-[11px] font-mono text-[#172D50]/60">
+                ({selectedDate})
+              </span>
+            </div>
+            <h3 className="text-lg sm:text-xl font-serif font-bold text-[#172D50]">
+              {selectedDateConflict?.hasConflict 
+                ? 'Start time looks free, the meeting is not' 
+                : `${formattedSelectedHeader} · Schedule`}
+            </h3>
+          </div>
+
+          {/* Previous / Next Day Steppers */}
+          <div className="flex items-center gap-2 font-mono text-xs">
+            <button
+              type="button"
+              onClick={handlePrevDay}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] hover:bg-[#FAF8DB] transition-colors cursor-pointer"
+              title="Previous Day"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Prev Day</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleNextDay}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] hover:bg-[#FAF8DB] transition-colors cursor-pointer"
+              title="Next Day"
+            >
+              <span>Next Day</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Timeline Tick Labels */}
+        <div className="relative w-full h-6 mb-2">
+          {timelineData.ticks.map((t) => (
+            <span
+              key={t.minute}
+              className="absolute text-xs sm:text-sm font-mono text-[#172D50]/60 -translate-x-1/2 select-none"
+              style={{ left: `${t.pct}%` }}
+            >
+              {t.label}
+            </span>
+          ))}
+        </div>
+
+        {/* Interactive Time Canvas (Clicking empty slot opens Add Event) */}
+        <div 
+          onClick={(e) => {
+            // If user clicked the canvas background (not an event bar)
+            if (e.target === e.currentTarget || (e.target as HTMLElement).hasAttribute('data-slot-bg')) {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const clickX = e.clientX - rect.left;
+              const pct = Math.max(0, Math.min(1, clickX / rect.width));
+              const clickedMinute = timelineData.baseMin + pct * timelineData.span;
+              const nearest30 = Math.floor(clickedMinute / 30) * 30;
+              const startStr = formatMinutes24(nearest30);
+              const endStr = formatMinutes24(nearest30 + 60);
+              handleOpenAddEvent(selectedDate, startStr, endStr);
+            }
+          }}
+          title="Click empty slot to schedule an event"
+          className="relative w-full py-4 space-y-3.5 min-h-[140px] flex flex-col justify-center cursor-pointer select-none rounded-xl bg-[#FAF8DB]/40 border border-dashed border-[#E8E5BA]/60"
+        >
+          {/* Vertical Grid Lines for each tick */}
+          {timelineData.ticks.map((t) => (
+            <div
+              key={`line-${t.minute}`}
+              data-slot-bg="true"
+              className="absolute top-0 bottom-0 border-l border-[#E8E5BA] pointer-events-none"
+              style={{ left: `${t.pct}%` }}
+              aria-hidden="true"
+            />
+          ))}
+
+          {/* Red Dashed Marker 1: Overlap Start */}
+          {selectedDateConflict?.hasConflict && (
+            <div
+              className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#dc2626] z-20 pointer-events-none transition-all duration-300"
+              style={{ left: `${timelineData.marker1Pct}%` }}
+              aria-hidden="true"
+            />
+          )}
+
+          {/* Red Dashed Marker 2: Overlap Boundary */}
+          {selectedDateConflict?.hasConflict && (
+            <div
+              className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#dc2626] z-20 pointer-events-none transition-all duration-300"
+              style={{ left: `${timelineData.marker2Pct}%` }}
+              aria-hidden="true"
+            />
+          )}
+
+          {/* Shaded Pale Overlap Region */}
+          {selectedDateConflict?.hasConflict && (
+            <div
+              className="absolute top-0 bottom-0 bg-[#dc2626]/10 z-10 pointer-events-none transition-all duration-300"
+              style={{
+                left: `${timelineData.overlapLeftPct}%`,
+                width: `${timelineData.overlapWidthPct}%`
+              }}
+              aria-hidden="true"
+            />
+          )}
+
+          {/* Render Timed Event Bars in Staggered Rows */}
+          {timelineData.mappedEvents.length > 0 ? (
+            timelineData.mappedEvents.map((ev) => (
+              <div key={ev.id} className="relative w-full h-10 z-15">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedTimelineEventId(ev.id);
+                    handleOpenEditEvent(ev);
+                  }}
+                  title={`${ev.title} (${ev.startTime}–${ev.endTime}) - Click to view/edit details`}
+                  className={`absolute h-full rounded-lg font-mono text-xs sm:text-sm font-semibold flex items-center justify-between px-3.5 shadow-2xs tracking-tight transition-all duration-300 truncate text-left cursor-pointer hover:brightness-105 active:scale-[0.99] border ${
+                    ev.color === 'cyan'
+                      ? 'bg-[#06b6d4] text-[#0f172a] border-[#0891b2]'
+                      : ev.color === 'blue'
+                      ? 'bg-[#1d4ed8] text-white border-[#1e40af]'
+                      : ev.color === 'rose'
+                      ? 'bg-[#dc2626] text-white border-[#b91c1c]'
+                      : ev.color === 'forest'
+                      ? 'bg-[#10380B] text-[#FEFDE6] border-[#0b2607]'
+                      : 'bg-[#f59e0b] text-[#172D50] border-[#d97706]'
+                  } ${selectedTimelineEventId === ev.id ? 'ring-2 ring-[#172D50]' : ''}`}
+                  style={{
+                    left: `${ev.leftPct}%`,
+                    width: `${ev.widthPct}%`
+                  }}
+                >
+                  <span className="truncate">{ev.label}</span>
+                  {ev.venue && (
+                    <span className="hidden md:inline-block ml-2 text-[10px] opacity-80 shrink-0">
+                      {ev.venue}
+                    </span>
+                  )}
+                </button>
+              </div>
+            ))
+          ) : (
+            <div data-slot-bg="true" className="text-center py-6 text-xs font-mono text-[#172D50]/40">
+              No timed events on this date. Click anywhere on this timeline to schedule a slot.
+            </div>
+          )}
+        </div>
+
+        {/* Red Overlap Caption / Conflict Status */}
+        <div className="relative mt-4 flex items-center justify-center text-center">
+          <p className={`text-xs sm:text-sm font-mono font-semibold transition-all ${
+            selectedDateConflict?.hasConflict ? 'text-[#dc2626]' : 'text-[#10380B]'
+          }`}>
+            {selectedDateConflict?.hasConflict
+              ? `${selectedDateConflict.overlapMinutes} min overlap: check the full duration`
+              : '0 min overlap: check the full duration (Clear)'}
+          </p>
+        </div>
+
+        {/* Timeline Interactive Controls & Quick Shift Bar */}
+        <div className="mt-5 pt-3 border-t border-[#E8E5BA]/60 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-[#172D50]">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[#172D50]/60 text-[11px]">Selected:</span>
+            <select
+              value={selectedTimelineEventId}
+              onChange={(e) => setSelectedTimelineEventId(e.target.value)}
+              className="px-2.5 py-1 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] font-semibold text-xs cursor-pointer"
+            >
+              {selectedDateEvents.map(ev => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.title} ({ev.startTime}–{ev.endTime})
+                </option>
+              ))}
+            </select>
+
+            {/* Quick Shift Buttons */}
+            <span className="text-[#172D50]/60 text-[11px] ml-2">Shift:</span>
+            <button
+              type="button"
+              onClick={() => handleShiftTimelineEvent(-15)}
+              className="px-2 py-1 rounded bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] hover:bg-[#FAF8DB] cursor-pointer"
+              title="Shift -15 minutes"
+            >
+              -15m
+            </button>
+            <button
+              type="button"
+              onClick={() => handleShiftTimelineEvent(15)}
+              className="px-2 py-1 rounded bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] hover:bg-[#FAF8DB] cursor-pointer"
+              title="Shift +15 minutes"
+            >
+              +15m
+            </button>
+            <button
+              type="button"
+              onClick={() => handleShiftTimelineEvent(30)}
+              className="px-2 py-1 rounded bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] hover:bg-[#FAF8DB] cursor-pointer"
+              title="Shift +30 minutes"
+            >
+              +30m
+            </button>
+
+            {selectedTimelineEvent && (
+              <button
+                type="button"
+                onClick={() => handleOpenEditEvent(selectedTimelineEvent)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] hover:bg-[#FAF8DB] cursor-pointer ml-2"
+              >
+                <Edit3 className="w-3 h-3" />
+                <span>Edit</span>
+              </button>
+            )}
+          </div>
+
+          {selectedTimelineEvent && (
+            <button
+              type="button"
+              onClick={() => handlePromptDelete(selectedTimelineEvent)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#FFF0F0] border border-[#FCA5A5] text-[#dc2626] hover:bg-[#FEE2E2] cursor-pointer"
+              title="Delete Selected Event"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Delete</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ============================================================ */}
+      {/* 3. SECTION: INTERACTIVE MONTHLY CALENDAR GRID               */}
+      {/* ============================================================ */}
+      <div className="bg-[#FAF8DB]/90 border border-[#E8E5BA] rounded-2xl p-4 sm:p-6 shadow-xs relative overflow-hidden">
+        
+        <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E8E5BA]/60 text-xs font-mono">
+          <span className="font-bold text-[#172D50] uppercase tracking-wider">
+            Monthly Calendar Grid
+          </span>
+          <span className="text-[#172D50]/60">
+            Click any date to view agenda · Click empty area to add event
+          </span>
+        </div>
+
         {/* Days of Week Header */}
         <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center font-mono text-xs font-bold text-[#172D50]/70 mb-2">
           {DAY_NAMES.map(day => (
@@ -618,8 +1042,15 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             return (
               <div
                 key={cell.dateStr}
-                onClick={() => setSelectedDate(cell.dateStr)}
-                className={`min-h-[92px] sm:min-h-[105px] p-1.5 sm:p-2 rounded-xl border flex flex-col justify-between transition-all cursor-pointer relative ${
+                onClick={(e) => {
+                  // If user clicked cell background (not an event label)
+                  setSelectedDate(cell.dateStr);
+                  if (e.target === e.currentTarget) {
+                    // Open add event for that date
+                    handleOpenAddEvent(cell.dateStr);
+                  }
+                }}
+                className={`min-h-[95px] sm:min-h-[110px] p-1.5 sm:p-2 rounded-xl border flex flex-col justify-between transition-all cursor-pointer relative ${
                   isSelected
                     ? 'bg-[#FEFDE6] border-[#172D50] ring-2 ring-[#172D50]/20 shadow-xs'
                     : cell.isCurrentMonth
@@ -628,7 +1059,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                 }`}
               >
                 {/* Top Row: Date Number & Badges */}
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between mb-1 pointer-events-none">
                   <span className={`font-mono text-xs sm:text-sm font-bold ${
                     isSelected
                       ? 'text-[#172D50] w-6 h-6 rounded-full bg-[#FAF8DB] border border-[#172D50] flex items-center justify-center'
@@ -652,12 +1083,19 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                   )}
                 </div>
 
-                {/* Event Pills inside Date Cell */}
+                {/* Event Pills inside Date Cell (Clicking pill opens event details) */}
                 <div className="space-y-1 flex-1 overflow-hidden">
                   {cell.dayEvents.slice(0, maxVisible).map(ev => (
-                    <div
+                    <button
                       key={ev.id}
-                      className={`px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-mono font-medium truncate flex items-center gap-1 border ${
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDate(cell.dateStr);
+                        handleOpenEditEvent(ev);
+                      }}
+                      title={`${ev.title} (${ev.startTime}–${ev.endTime}) - Click to inspect/edit`}
+                      className={`w-full px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-mono font-medium truncate flex items-center gap-1 border text-left cursor-pointer hover:brightness-95 ${
                         ev.color === 'cyan'
                           ? 'bg-[#ECFEFF] text-[#0891b2] border-[#A5F3FC]'
                           : ev.color === 'blue'
@@ -676,20 +1114,29 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                         ev.color === 'forest' ? 'bg-[#15803d]' : 'bg-[#d97706]'
                       }`} />
                       <span className="truncate">{ev.title}</span>
-                    </div>
+                    </button>
                   ))}
 
-                  {/* +N more indicator */}
+                  {/* Interactive +N more button */}
                   {overflowCount > 0 && (
-                    <div className="text-[10px] font-mono text-[#172D50]/60 pl-1 font-semibold">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDate(cell.dateStr);
+                        setMorePopoverDate(prev => prev === cell.dateStr ? null : cell.dateStr);
+                      }}
+                      className="text-[10px] font-mono text-[#172D50] hover:text-[#E65100] pl-1 font-semibold block text-left cursor-pointer underline"
+                      title="View all events on this day"
+                    >
                       +{overflowCount} more
-                    </div>
+                    </button>
                   )}
                 </div>
 
-                {/* Subtle indicator dots if day has events */}
+                {/* Event Dots */}
                 {cell.dayEvents.length > 0 && (
-                  <div className="flex items-center gap-1 pt-1">
+                  <div className="flex items-center gap-1 pt-1 pointer-events-none">
                     {cell.dayEvents.slice(0, 3).map((ev, i) => (
                       <span
                         key={i}
@@ -707,10 +1154,52 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             );
           })}
         </div>
+
+        {/* Interactive +N More Popover */}
+        {morePopoverDate && (
+          <div className="absolute inset-x-6 top-16 z-30 bg-[#FEFDE6] border-2 border-[#172D50] rounded-2xl p-5 shadow-2xl animate-fade-in font-mono text-xs">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E8E5BA]">
+              <span className="font-serif font-bold text-sm text-[#172D50]">
+                All Events for {morePopoverDate}
+              </span>
+              <button
+                type="button"
+                onClick={() => setMorePopoverDate(null)}
+                className="text-[#172D50]/60 hover:text-[#172D50] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {(eventsByDate.get(morePopoverDate) || []).map(ev => (
+                <div
+                  key={ev.id}
+                  onClick={() => {
+                    handleOpenEditEvent(ev);
+                    setMorePopoverDate(null);
+                  }}
+                  className="p-2.5 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] hover:border-[#172D50] flex items-center justify-between gap-3 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${
+                      ev.color === 'cyan' ? 'bg-[#06b6d4]' :
+                      ev.color === 'blue' ? 'bg-[#1d4ed8]' :
+                      ev.color === 'rose' ? 'bg-[#dc2626]' :
+                      ev.color === 'forest' ? 'bg-[#10380B]' : 'bg-[#f59e0b]'
+                    }`} />
+                    <span className="font-bold text-[#172D50]">{ev.title}</span>
+                  </div>
+                  <span className="text-[#172D50]/70">{ev.startTime}–{ev.endTime}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ============================================================ */}
-      {/* SECTION B: SELECTED-DAY AGENDA                               */}
+      {/* 4. SECTION: INTERACTIVE SELECTED-DAY AGENDA                 */}
       {/* ============================================================ */}
       <div className="bg-[#FEFDE6] border border-[#172D50]/20 rounded-2xl p-6 sm:p-8 shadow-xs animate-fade-in">
         
@@ -775,7 +1264,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
           </div>
         )}
 
-        {/* Selected-Day Chronological Events List */}
+        {/* Chronological Events List */}
         {selectedDateEvents.length > 0 ? (
           <div className="space-y-4">
             {selectedDateEvents.map(ev => {
@@ -785,7 +1274,8 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
               return (
                 <div
                   key={ev.id}
-                  className="p-5 rounded-xl bg-[#FAF8DB]/60 border border-[#E8E5BA] hover:bg-[#FAF8DB] transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-4 shadow-2xs"
+                  onClick={() => handleOpenEditEvent(ev)}
+                  className="p-5 rounded-xl bg-[#FAF8DB]/60 border border-[#E8E5BA] hover:bg-[#FAF8DB] hover:border-[#172D50]/40 transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-4 shadow-2xs cursor-pointer"
                 >
                   <div className="flex items-start gap-3.5">
                     {/* Category Dot */}
@@ -850,11 +1340,14 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                     </div>
                   </div>
 
-                  {/* Actions: Edit, Delete, Export */}
+                  {/* Actions: Edit & Delete buttons */}
                   <div className="flex items-center gap-2 shrink-0 self-end sm:self-start">
                     <button
                       type="button"
-                      onClick={() => handleOpenEditEvent(ev)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenEditEvent(ev);
+                      }}
                       className="p-1.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50]/70 hover:text-[#172D50] hover:bg-[#FAF8DB] transition-colors cursor-pointer"
                       title="Edit Event"
                     >
@@ -863,7 +1356,10 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
 
                     <button
                       type="button"
-                      onClick={() => handleDeleteEvent(ev.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePromptDelete(ev);
+                      }}
                       className="p-1.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] text-[#dc2626]/70 hover:text-[#dc2626] hover:bg-[#FFF0F0] transition-colors cursor-pointer"
                       title="Delete Event"
                     >
@@ -896,7 +1392,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
       </div>
 
       {/* ============================================================ */}
-      {/* ADD / EDIT EVENT MODAL                                       */}
+      {/* 5. ADD / EDIT EVENT MODAL                                    */}
       {/* ============================================================ */}
       {isEditorOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
@@ -950,10 +1446,11 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                   <label className="block text-[#172D50] font-medium mb-1">Start Time</label>
                   <input
                     type="time"
-                    required
+                    required={!formIsAllDay}
+                    disabled={formIsAllDay}
                     value={formStartTime}
                     onChange={(e) => setFormStartTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden"
+                    className="w-full px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden disabled:opacity-50"
                   />
                 </div>
 
@@ -961,12 +1458,27 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                   <label className="block text-[#172D50] font-medium mb-1">End Time</label>
                   <input
                     type="time"
-                    required
+                    required={!formIsAllDay}
+                    disabled={formIsAllDay}
                     value={formEndTime}
                     onChange={(e) => setFormEndTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden"
+                    className="w-full px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden disabled:opacity-50"
                   />
                 </div>
+              </div>
+
+              {/* All-Day Checkbox */}
+              <div className="flex items-center gap-2 pt-0.5">
+                <input
+                  type="checkbox"
+                  id="all-day-checkbox"
+                  checked={formIsAllDay}
+                  onChange={(e) => setFormIsAllDay(e.target.checked)}
+                  className="rounded border-[#E8E5BA] text-[#172D50] focus:ring-0 cursor-pointer"
+                />
+                <label htmlFor="all-day-checkbox" className="text-xs text-[#172D50] cursor-pointer select-none">
+                  All-day event or deadline (no fixed hour)
+                </label>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -975,7 +1487,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                   <select
                     value={formCategory}
                     onChange={(e) => setFormCategory(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden"
+                    className="w-full px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden cursor-pointer"
                   >
                     <option value="Meeting">Meeting</option>
                     <option value="Lecture">Lecture</option>
@@ -1032,7 +1544,10 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                 {editingEventId ? (
                   <button
                     type="button"
-                    onClick={() => handleDeleteEvent(editingEventId)}
+                    onClick={() => {
+                      const ev = events.find(e => e.id === editingEventId);
+                      if (ev) handlePromptDelete(ev);
+                    }}
                     className="px-3 py-2 rounded-lg bg-[#FFF0F0] border border-[#FCA5A5] text-[#dc2626] font-semibold hover:bg-[#FEE2E2] transition-colors cursor-pointer"
                   >
                     Delete Event
@@ -1059,6 +1574,39 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* 6. DELETE CONFIRMATION MODAL                                 */}
+      {/* ============================================================ */}
+      {eventToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-[#FEFDE6] border border-[#E8E5BA] rounded-2xl p-6 shadow-xl animate-fade-in font-mono text-xs">
+            <div className="flex items-center gap-2 text-[#dc2626] font-bold text-sm mb-2">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <span>Confirm Event Deletion</span>
+            </div>
+            <p className="text-[#172D50]/80 font-sans text-xs leading-relaxed mb-4">
+              Are you sure you want to delete <strong>&ldquo;{eventToDelete.title}&rdquo;</strong> on {eventToDelete.date}? This will remove it from the daily timeline, monthly grid, and agenda.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8E5BA]">
+              <button
+                type="button"
+                onClick={() => setEventToDelete(null)}
+                className="px-3 py-1.5 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] hover:bg-[#F2EE98]/30 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-3.5 py-1.5 rounded-lg bg-[#dc2626] text-white hover:bg-[#b91c1c] font-semibold cursor-pointer shadow-xs"
+              >
+                Delete Everywhere
+              </button>
+            </div>
           </div>
         </div>
       )}
