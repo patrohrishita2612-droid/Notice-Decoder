@@ -350,20 +350,20 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#FEFDE6] text-[#172D50] font-sans selection:bg-[#F2EE98] selection:text-[#172D50]">
+    <div className="min-h-screen bg-[#F7F4E9] text-[#172B4D] font-sans selection:bg-[#D9A928] selection:text-[#172B4D]">
       
       {/* 1. AUTHENTICATED WORKSPACE EDITORIAL NAVIGATION */}
-      <header className="sticky top-0 z-40 bg-[#FEFDE6]/90 backdrop-blur-md border-b border-[#E8E5BA] transition-all">
+      <header className="sticky top-0 z-40 bg-[#FFFDF7]/95 backdrop-blur-md border-b border-[#E2DDD0] transition-all">
         <div className="max-w-6xl mx-auto px-6 h-16 md:h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#172D50] flex items-center justify-center text-[#F2EE98] font-mono font-bold text-sm shadow-xs">
+            <div className="w-8 h-8 rounded-lg bg-[#172B4D] flex items-center justify-center text-[#D9A928] font-mono font-bold text-sm shadow-xs">
               ND
             </div>
             <div>
-              <span className="font-serif font-bold text-lg md:text-xl text-[#172D50] tracking-tight block leading-tight">
+              <span className="font-serif font-bold text-lg md:text-xl text-[#172B4D] tracking-tight block leading-tight">
                 Notice Decoder
               </span>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-[#10380B] font-semibold">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-[#172B4D]/70 font-semibold">
                 Personal Academic Calendar & Intelligence
               </span>
             </div>
@@ -375,7 +375,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border ${
                 isOnline 
                   ? 'bg-[#F0FDF4] border-[#86EFAC] text-[#15803D]' 
-                  : 'bg-[#FFF8E1] border-[#FFE082] text-[#E65100]'
+                  : 'bg-[#FFF8E6] border-[#EED17D] text-[#D9A928]'
               }`}>
                 {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
                 <span>{isOnline ? 'Online' : 'Offline Cache'}</span>
@@ -385,7 +385,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                 <button
                   type="button"
                   onClick={syncOfflineQueue}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-[#FEFDE6] border border-[#E8E5BA] text-[#E65100] hover:bg-[#FAF8DB] cursor-pointer"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-[#FFFDF7] border border-[#E2DDD0] text-[#D9A928] hover:bg-[#F7F4E9] cursor-pointer"
                   title="Click to sync offline changes"
                 >
                   <RefreshCw className="w-2.5 h-2.5 animate-spin" />
@@ -395,13 +395,13 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
             </div>
 
             <div className="hidden md:flex flex-col text-right">
-              <span className="font-mono text-xs font-semibold text-[#172D50]">{user?.name}</span>
-              <span className="font-mono text-[10px] text-[#172D50]/60">{user?.email}</span>
+              <span className="font-mono text-xs font-semibold text-[#172B4D]">{user?.name}</span>
+              <span className="font-mono text-[10px] text-[#172B4D]/60">{user?.email}</span>
             </div>
 
             <button
               onClick={logout}
-              className="px-3 py-1.5 rounded-lg bg-[#FAF8DB] hover:bg-[#F2EE98]/40 border border-[#E8E5BA] text-xs font-mono text-[#E65100] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-[#FFFDF7] hover:bg-[#FFF0F0] border border-[#E2DDD0] text-xs font-mono text-[#D9574F] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Sign out</span>
@@ -411,7 +411,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       </header>
 
       {/* 2. UNIFIED WORKSPACE TABS (Removed Separate Course Timetable) */}
-      <div className="bg-[#FAF8DB]/60 border-b border-[#E8E5BA] px-6">
+      <div className="bg-[#FFFDF7]/70 border-b border-[#E2DDD0] px-6">
         <div className="max-w-6xl mx-auto flex items-center gap-1 sm:gap-2 overflow-x-auto py-2">
           
           {/* Unified Personal Academic Calendar Tab */}
@@ -420,13 +420,13 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
             onClick={() => handleTabChange('calendar')}
             className={`px-3.5 py-2 rounded-lg text-xs font-mono font-medium flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'calendar'
-                ? 'bg-[#172D50] text-[#FEFDE6] shadow-xs'
-                : 'text-[#172D50]/70 hover:bg-[#FAF8DB] hover:text-[#172D50]'
+                ? 'bg-[#172B4D] text-[#FFFDF7] shadow-xs'
+                : 'text-[#172B4D]/70 hover:bg-[#F7F4E9] hover:text-[#172B4D]'
             }`}
           >
             <CalendarIcon className="w-3.5 h-3.5" />
             <span>Academic Calendar</span>
-            <span className="px-1.5 py-0.2 rounded text-[10px] bg-black/20 text-white/90">
+            <span className="px-1.5 py-0.2 rounded text-[10px] bg-white/20 text-white/95">
               {calendarEvents.length}
             </span>
           </button>
@@ -437,8 +437,8 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
             onClick={() => handleTabChange('notices')}
             className={`px-3.5 py-2 rounded-lg text-xs font-mono font-medium flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'notices'
-                ? 'bg-[#172D50] text-[#FEFDE6] shadow-xs'
-                : 'text-[#172D50]/70 hover:bg-[#FAF8DB] hover:text-[#172D50]'
+                ? 'bg-[#172B4D] text-[#FFFDF7] shadow-xs'
+                : 'text-[#172B4D]/70 hover:bg-[#F7F4E9] hover:text-[#172B4D]'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -451,13 +451,13 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
             onClick={() => handleTabChange('deadlines')}
             className={`px-3.5 py-2 rounded-lg text-xs font-mono font-medium flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'deadlines'
-                ? 'bg-[#172D50] text-[#FEFDE6] shadow-xs'
-                : 'text-[#172D50]/70 hover:bg-[#FAF8DB] hover:text-[#172D50]'
+                ? 'bg-[#172B4D] text-[#FFFDF7] shadow-xs'
+                : 'text-[#172B4D]/70 hover:bg-[#F7F4E9] hover:text-[#172B4D]'
             }`}
           >
             <CheckSquare className="w-3.5 h-3.5" />
             <span>Personal Deadlines</span>
-            <span className="px-1.5 py-0.2 rounded text-[10px] bg-[#E65100]/20 text-[#E65100] font-bold">
+            <span className="px-1.5 py-0.2 rounded text-[10px] bg-[#D9574F]/20 text-[#D9574F] font-bold">
               {deadlines.filter(d => !d.completed).length}
             </span>
           </button>
@@ -504,16 +504,16 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
           <div className="space-y-8 animate-fade-in">
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono text-[#10380B]">
-                  <span className="w-2 h-2 rounded-full bg-[#10380B] animate-pulse"></span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FFFDF7] border border-[#E2DDD0] text-xs font-mono text-[#172B4D]">
+                  <span className="w-2 h-2 rounded-full bg-[#172B4D] animate-pulse"></span>
                   Grounded Extraction Engine
                 </span>
-                <span className="text-xs font-mono text-[#172D50]/60">Academic Notice Intelligence</span>
+                <span className="text-xs font-mono text-[#172B4D]/60">Academic Notice Intelligence</span>
               </div>
-              <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#172D50]">
+              <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#172B4D]">
                 Notice Ingestion & Schedule Synchronizer
               </h1>
-              <p className="mt-1 text-sm text-[#172D50]/70">
+              <p className="mt-1 text-sm text-[#172B4D]/75">
                 Paste an unstructured academic circular to extract dates, identify buried deadlines, and automatically schedule events into your personal calendar.
               </p>
             </div>
@@ -522,20 +522,20 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               
               {/* Left Column: Input Box & Sample Notice Selectors */}
-              <div className="lg:col-span-6 bg-[#FAF8DB]/60 border border-[#E8E5BA] rounded-2xl p-6 shadow-xs">
+              <div className="lg:col-span-6 bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-6 shadow-xs">
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#172D50]/80 flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-[#172D50]" />
+                  <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#172B4D] flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-[#172B4D]" />
                     Unstructured Notice Text
                   </span>
-                  <span className="text-[11px] font-mono text-[#172D50]/50">
+                  <span className="text-[11px] font-mono text-[#172B4D]/50">
                     Supports circulars & PDFs
                   </span>
                 </div>
 
                 {/* Quick Template Buttons */}
                 <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-mono text-[#172D50]/60">Load specimen:</span>
+                  <span className="text-[11px] font-mono text-[#172B4D]/60">Load specimen:</span>
                   {TEMPLATE_NOTICES.map((tmpl, idx) => (
                     <button
                       key={idx}
@@ -544,7 +544,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                         setNoticeText(tmpl.text);
                         setExtractedDraft(null);
                       }}
-                      className="px-2.5 py-1 rounded bg-[#FEFDE6] hover:bg-[#FAF8DB] border border-[#E8E5BA] text-[11px] font-mono text-[#172D50] transition-colors cursor-pointer"
+                      className="px-2.5 py-1 rounded bg-[#F7F4E9] hover:bg-[#E2DDD0]/40 border border-[#E2DDD0] text-[11px] font-mono text-[#172B4D] transition-colors cursor-pointer"
                     >
                       {tmpl.name}
                     </button>
@@ -557,12 +557,12 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                   value={noticeText}
                   onChange={(e) => setNoticeText(e.target.value)}
                   placeholder="Paste college circular, exam schedule, guest lecture announcement, or club notice..."
-                  className="w-full p-4 rounded-xl bg-[#FEFDE6] border border-[#E8E5BA] font-mono text-xs text-[#172D50] placeholder-[#172D50]/40 focus:outline-hidden focus:border-[#172D50] focus:ring-1 focus:ring-[#172D50] transition-all resize-y leading-relaxed"
+                  className="w-full p-4 rounded-xl bg-[#F7F4E9]/50 border border-[#E2DDD0] font-mono text-xs text-[#172B4D] placeholder-[#172B4D]/40 focus:outline-hidden focus:border-[#172B4D] focus:bg-[#FFFDF7] focus:ring-1 focus:ring-[#172B4D] transition-all resize-y leading-relaxed"
                 />
 
                 {/* Action Bar */}
                 <div className="mt-4 flex items-center justify-between gap-4">
-                  <span className="text-[11px] font-mono text-[#172D50]/60">
+                  <span className="text-[11px] font-mono text-[#172B4D]/60">
                     {noticeText.trim().split(/\s+/).filter(Boolean).length} words
                   </span>
 
@@ -570,9 +570,9 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                     type="button"
                     onClick={handleStartDecoding}
                     disabled={isDecoding || !noticeText.trim()}
-                    className="px-5 py-2.5 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-all font-medium text-xs font-mono flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2.5 rounded-lg bg-[#172B4D] text-[#FFFDF7] hover:bg-[#244270] transition-all font-medium text-xs font-mono flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-[#F2EE98]" />
+                    <Sparkles className="w-3.5 h-3.5 text-[#D9A928]" />
                     <span>{isDecoding ? 'Decoding Circular...' : 'Decode Notice'}</span>
                   </button>
                 </div>
@@ -583,52 +583,52 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                 {isDecoding ? (
                   <NoticeProcessingSteps onComplete={handleProcessingComplete} />
                 ) : extractedDraft ? (
-                  <div className="bg-[#FEFDE6] border border-[#172D50]/20 rounded-2xl p-6 shadow-xs animate-fade-in">
+                  <div className="bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-6 shadow-xs animate-fade-in">
                     {/* Draft Header */}
-                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#E8E5BA]">
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#E2DDD0]">
                       <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#10380B]"></span>
-                        <span className="text-xs font-mono uppercase tracking-wider text-[#10380B] font-semibold">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#172B4D]"></span>
+                        <span className="text-xs font-mono uppercase tracking-wider text-[#172B4D] font-semibold">
                           Extracted Notice Intelligence
                         </span>
                       </div>
-                      <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50]/80">
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#F7F4E9] border border-[#E2DDD0] text-[#172B4D]">
                         {extractedDraft.category}
                       </span>
                     </div>
 
                     {/* Event Title & Summary */}
-                    <h3 className="text-xl font-serif font-bold text-[#172D50] mb-2">
+                    <h3 className="text-xl font-serif font-bold text-[#172B4D] mb-2">
                       {extractedDraft.title}
                     </h3>
-                    <p className="text-xs text-[#172D50]/80 font-sans leading-relaxed mb-4">
+                    <p className="text-xs text-[#172B4D]/80 font-sans leading-relaxed mb-4">
                       {extractedDraft.summary}
                     </p>
 
                     {/* Key Metrics */}
                     <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="p-3 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA]">
-                        <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase text-[#172D50]/60 mb-1">
-                          <Clock className="w-3 h-3 text-[#172D50]" />
+                      <div className="p-3 rounded-xl bg-[#F7F4E9]/60 border border-[#E2DDD0]">
+                        <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase text-[#172B4D]/60 mb-1">
+                          <Clock className="w-3 h-3 text-[#172B4D]" />
                           <span>Extracted Hours</span>
                         </div>
-                        <span className="font-mono text-xs font-bold text-[#172D50] block">
+                        <span className="font-mono text-xs font-bold text-[#172B4D] block">
                           {extractedDraft.startTime} – {extractedDraft.endTime}
                         </span>
-                        <span className="font-mono text-[10px] text-[#172D50]/60">
+                        <span className="font-mono text-[10px] text-[#172B4D]/60">
                           {extractedDraft.date} ({extractedDraft.isoDate})
                         </span>
                       </div>
 
-                      <div className="p-3 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA]">
-                        <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase text-[#172D50]/60 mb-1">
-                          <MapPin className="w-3 h-3 text-[#172D50]" />
+                      <div className="p-3 rounded-xl bg-[#F7F4E9]/60 border border-[#E2DDD0]">
+                        <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase text-[#172B4D]/60 mb-1">
+                          <MapPin className="w-3 h-3 text-[#172B4D]" />
                           <span>Venue / Location</span>
                         </div>
-                        <span className="font-mono text-xs font-bold text-[#172D50] block truncate">
+                        <span className="font-mono text-xs font-bold text-[#172B4D] block truncate">
                           {extractedDraft.venue}
                         </span>
-                        <span className="font-mono text-[10px] text-[#172D50]/60">
+                        <span className="font-mono text-[10px] text-[#172B4D]/60">
                           Offline Mode
                         </span>
                       </div>
@@ -636,12 +636,12 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
 
                     {/* Buried Deadline Highlight */}
                     {extractedDraft.deadline && (
-                      <div className="mb-4 p-3.5 rounded-xl bg-[#FFF8E1] border border-[#FFE082] text-xs">
-                        <div className="flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#E65100] mb-1">
+                      <div className="mb-4 p-3.5 rounded-xl bg-[#FFF8E6] border border-[#EED17D] text-xs">
+                        <div className="flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#D9A928] mb-1">
                           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                           <span>Buried Deadline Detected: {extractedDraft.deadline}</span>
                         </div>
-                        <p className="font-sans text-[11px] text-[#172D50]/80">
+                        <p className="font-sans text-[11px] text-[#172B4D]/80">
                           {extractedDraft.deadlineAction}
                         </p>
                       </div>
@@ -651,26 +651,26 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                     {extractedDraft.uncertainFlags && extractedDraft.uncertainFlags.length > 0 && (
                       <div className="mb-5 space-y-2">
                         {extractedDraft.uncertainFlags.map((flag, idx) => (
-                          <div key={idx} className="p-3 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA] text-xs">
-                            <div className="font-mono text-[11px] font-semibold text-[#172D50] flex items-center justify-between">
+                          <div key={idx} className="p-3 rounded-xl bg-[#F7F4E9] border border-[#E2DDD0] text-xs">
+                            <div className="font-mono text-[11px] font-semibold text-[#172B4D] flex items-center justify-between">
                               <span>Audit Flag: {flag.field}</span>
-                              <span className="text-[10px] text-[#E65100] uppercase font-bold">Needs Verification</span>
+                              <span className="text-[10px] text-[#D9A928] uppercase font-bold">Needs Verification</span>
                             </div>
-                            <p className="text-[11px] text-[#172D50]/70 mt-1 font-sans">{flag.reason}</p>
-                            <p className="text-[11px] text-[#10380B] mt-1 font-mono font-medium">Recommendation: {flag.suggestion}</p>
+                            <p className="text-[11px] text-[#172B4D]/70 mt-1 font-sans">{flag.reason}</p>
+                            <p className="text-[11px] text-[#172B4D] mt-1 font-mono font-medium">Recommendation: {flag.suggestion}</p>
                           </div>
                         ))}
                       </div>
                     )}
 
                     {/* Actions: Add to Personal Calendar & Export ICS */}
-                    <div className="pt-3 border-t border-[#E8E5BA] flex flex-wrap items-center justify-between gap-3">
+                    <div className="pt-3 border-t border-[#E2DDD0] flex flex-wrap items-center justify-between gap-3">
                       <button
                         type="button"
                         onClick={handleAddToCalendar}
-                        className="px-4 py-2 rounded-lg bg-[#10380B] text-[#FEFDE6] hover:bg-[#185311] transition-all font-mono text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-xs"
+                        className="px-4 py-2 rounded-lg bg-[#172B4D] text-[#FFFDF7] hover:bg-[#244270] transition-all font-mono text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-xs"
                       >
-                        <CalendarIcon className="w-3.5 h-3.5 text-[#F2EE98]" />
+                        <CalendarIcon className="w-3.5 h-3.5 text-[#D9A928]" />
                         <span>Add to Personal Academic Calendar</span>
                       </button>
 
@@ -679,7 +679,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                         onClick={() => {
                           downloadNoticeIcs(extractedDraft);
                         }}
-                        className="px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] hover:bg-[#F2EE98]/40 text-[#172D50] transition-colors font-mono text-xs font-medium flex items-center gap-1.5 cursor-pointer"
+                        className="px-3 py-2 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] hover:bg-[#F7F4E9] text-[#172B4D] transition-colors font-mono text-xs font-medium flex items-center gap-1.5 cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Export .ics</span>
@@ -687,14 +687,14 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="h-full min-h-[320px] bg-[#FAF8DB]/30 border border-dashed border-[#E8E5BA] rounded-2xl p-8 flex flex-col items-center justify-center text-center">
-                    <div className="w-12 h-12 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50]/40 flex items-center justify-center mb-3">
+                  <div className="h-full min-h-[320px] bg-[#FFFDF7] border border-dashed border-[#E2DDD0] rounded-2xl p-8 flex flex-col items-center justify-center text-center">
+                    <div className="w-12 h-12 rounded-full bg-[#F7F4E9] border border-[#E2DDD0] text-[#172B4D]/40 flex items-center justify-center mb-3">
                       <Sparkles className="w-6 h-6" />
                     </div>
-                    <h4 className="font-serif font-bold text-base text-[#172D50]">
+                    <h4 className="font-serif font-bold text-base text-[#172B4D]">
                       Ready to Extract Notice Intelligence
                     </h4>
-                    <p className="mt-1 text-xs text-[#172D50]/60 max-w-sm font-sans leading-relaxed">
+                    <p className="mt-1 text-xs text-[#172B4D]/60 max-w-sm font-sans leading-relaxed">
                       Select a circular specimen above or paste your notice text, then click &ldquo;Decode Notice&rdquo; to initiate the 4-step parsing pipeline.
                     </p>
                   </div>
@@ -711,19 +711,19 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
           <div className="space-y-6 animate-fade-in">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono tracking-wider text-[#E65100] uppercase mb-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FFFDF7] border border-[#E2DDD0] text-xs font-mono tracking-wider text-[#D9574F] uppercase mb-2">
                   <CheckSquare className="w-3.5 h-3.5" />
                   <span>Personal Academic Deadlines</span>
                 </div>
-                <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#172D50]">
+                <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#172B4D]">
                   Buried Deadlines & Submission Tracker
                 </h1>
-                <p className="text-xs text-[#172D50]/70 font-sans mt-0.5">
+                <p className="text-xs text-[#172B4D]/70 font-sans mt-0.5">
                   Deadlines extracted directly from parsed circulars and notifications. Never miss a record submission or form deadline.
                 </p>
               </div>
 
-              <span className="text-xs font-mono px-3 py-1.5 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50]">
+              <span className="text-xs font-mono px-3 py-1.5 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D]">
                 {deadlines.filter(d => !d.completed).length} Pending · {deadlines.filter(d => d.completed).length} Completed
               </span>
             </div>
@@ -735,8 +735,8 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                   onClick={() => handleToggleDeadline(item.id)}
                   className={`p-4 rounded-xl border flex items-start justify-between gap-4 transition-all cursor-pointer ${
                     item.completed
-                      ? 'bg-[#FAF8DB]/40 border-[#E8E5BA] opacity-60'
-                      : 'bg-[#FEFDE6] border-[#172D50]/20 hover:border-[#172D50] shadow-xs'
+                      ? 'bg-[#F7F4E9]/40 border-[#E2DDD0] opacity-60'
+                      : 'bg-[#FFFDF7] border-[#E2DDD0] hover:border-[#172B4D] shadow-xs'
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -744,19 +744,19 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                       type="checkbox"
                       checked={item.completed}
                       onChange={() => handleToggleDeadline(item.id)}
-                      className="mt-1 rounded border-[#E8E5BA] text-[#172D50] focus:ring-0 cursor-pointer"
+                      className="mt-1 rounded border-[#E2DDD0] text-[#172B4D] focus:ring-0 cursor-pointer"
                     />
                     <div>
                       <span className={`font-serif font-bold text-sm block ${
-                        item.completed ? 'line-through text-[#172D50]/60' : 'text-[#172D50]'
+                        item.completed ? 'line-through text-[#172B4D]/60' : 'text-[#172B4D]'
                       }`}>
                         {item.title}
                       </span>
-                      <p className="font-sans text-xs text-[#172D50]/80 mt-1">
+                      <p className="font-sans text-xs text-[#172B4D]/80 mt-1">
                         {item.action}
                       </p>
                       {item.sourceNotice && (
-                        <span className="inline-block mt-2 text-[10px] text-[#172D50]/60 px-2 py-0.5 rounded bg-[#FAF8DB] border border-[#E8E5BA]">
+                        <span className="inline-block mt-2 text-[10px] text-[#172B4D]/70 px-2 py-0.5 rounded bg-[#F7F4E9] border border-[#E2DDD0]">
                           Source: {item.sourceNotice}
                         </span>
                       )}
@@ -764,16 +764,16 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                   </div>
 
                   <div className="text-right shrink-0">
-                    <span className="font-bold text-[#E65100] block text-xs">
+                    <span className="font-bold text-[#D9574F] block text-xs">
                       {item.dueTime}
                     </span>
-                    <span className="text-[10px] text-[#172D50]/60 block">
+                    <span className="text-[10px] text-[#172B4D]/60 block">
                       {item.dueDate}
                     </span>
                     <span className={`inline-block mt-1 text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${
                       item.priority === 'high'
-                        ? 'bg-[#FFF0F0] text-[#dc2626] border border-[#FCA5A5]'
-                        : 'bg-[#FAF8DB] text-[#10380B] border border-[#E8E5BA]'
+                        ? 'bg-[#FFF0F0] text-[#D9574F] border border-[#FCA5A5]'
+                        : 'bg-[#F7F4E9] text-[#172B4D] border border-[#E2DDD0]'
                     }`}>
                       {item.priority} priority
                     </span>

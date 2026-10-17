@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ChevronLeft, ChevronRight, Plus, Clock, MapPin, 
   Trash2, Edit3, X, AlertTriangle, Calendar as CalendarIcon, 
@@ -155,10 +155,12 @@ export interface PersonalAcademicCalendarProps {
   onSelectDate?: (date: string) => void;
 }
 
-const MONTH_NAMES = [
+export const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
+
+export const YEAR_OPTIONS = [2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030];
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -178,22 +180,14 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
   };
 
   // Selected date state (defaults to 2026-11-13 to showcase the prototype overlap specimen)
-  const [internalSelectedDate, setInternalSelectedDate] = useState<string>('2026-11-13');
+  const [internalSelectedDate, setInternalSelectedDate] = useState<string>(propSelectedDate || '2026-11-13');
   const selectedDate = propSelectedDate || internalSelectedDate;
-  
-  const setSelectedDate = (d: string) => {
-    setInternalSelectedDate(d);
-    onSelectDate?.(d);
-    // Keep month in view if selecting a date in a different month
-    const parts = d.split('-').map(Number);
-    if (parts.length === 3) {
-      const dYear = parts[0];
-      const dMonth = parts[1] - 1;
-      if (dYear !== viewDate.getFullYear() || dMonth !== viewDate.getMonth()) {
-        setViewDate(new Date(dYear, dMonth, 1));
-      }
-    }
-  };
+
+  // Real today date string
+  const todayDateStr = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }, []);
 
   // Current calendar view month and year
   const [viewDate, setViewDate] = useState<Date>(() => {
@@ -204,19 +198,87 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth(); // 0-indexed
 
+  // Keep viewDate and internalSelectedDate in sync when propSelectedDate changes from outside
+  useEffect(() => {
+    if (propSelectedDate) {
+      setInternalSelectedDate(propSelectedDate);
+      const parts = propSelectedDate.split('-').map(Number);
+      if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        const dYear = parts[0];
+        const dMonth = parts[1] - 1;
+        setViewDate(prev => {
+          if (prev.getFullYear() !== dYear || prev.getMonth() !== dMonth) {
+            return new Date(dYear, dMonth, 1);
+          }
+          return prev;
+        });
+      }
+    }
+  }, [propSelectedDate]);
+
+  // Update selected date and synchronize month view if needed
+  const setSelectedDate = (d: string) => {
+    setInternalSelectedDate(d);
+    onSelectDate?.(d);
+    // Keep month in view if selecting a date in a different month
+    const parts = d.split('-').map(Number);
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      const dYear = parts[0];
+      const dMonth = parts[1] - 1;
+      if (dYear !== viewDate.getFullYear() || dMonth !== viewDate.getMonth()) {
+        setViewDate(new Date(dYear, dMonth, 1));
+      }
+    }
+  };
+
+  // Helper to synchronize selectedDate when navigating to a new month or year
+  const syncSelectedDateToMonth = (targetYear: number, targetMonth: number) => {
+    const parts = selectedDate.split('-').map(Number);
+    const currDay = parts[2] || 1;
+    // Calculate total days in target month (accurately handles leap years e.g. Feb 2028 = 29)
+    const maxDays = new Date(targetYear, targetMonth + 1, 0).getDate();
+    const clampedDay = Math.min(currDay, maxDays);
+    const newDateStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
+    
+    setInternalSelectedDate(newDateStr);
+    onSelectDate?.(newDateStr);
+  };
+
   // Month navigation handlers
   const handlePrevMonth = () => {
-    setViewDate(new Date(year, month - 1, 1));
+    const newDate = new Date(year, month - 1, 1);
+    setViewDate(newDate);
+    syncSelectedDateToMonth(newDate.getFullYear(), newDate.getMonth());
   };
 
   const handleNextMonth = () => {
-    setViewDate(new Date(year, month + 1, 1));
+    const newDate = new Date(year, month + 1, 1);
+    setViewDate(newDate);
+    syncSelectedDateToMonth(newDate.getFullYear(), newDate.getMonth());
+  };
+
+  const handleSelectMonth = (newMonth: number) => {
+    const newDate = new Date(year, newMonth, 1);
+    setViewDate(newDate);
+    syncSelectedDateToMonth(year, newMonth);
+  };
+
+  const handleSelectYear = (newYear: number) => {
+    const newDate = new Date(newYear, month, 1);
+    setViewDate(newDate);
+    syncSelectedDateToMonth(newYear, month);
   };
 
   const handleToday = () => {
-    const targetDateStr = '2026-11-13';
-    setSelectedDate(targetDateStr);
-    setViewDate(new Date(2026, 10, 1));
+    const now = new Date();
+    const tYear = now.getFullYear();
+    const tMonth = now.getMonth();
+    const tDay = now.getDate();
+    const targetDateStr = `${tYear}-${String(tMonth + 1).padStart(2, '0')}-${String(tDay).padStart(2, '0')}`;
+    
+    setViewDate(new Date(tYear, tMonth, 1));
+    setInternalSelectedDate(targetDateStr);
+    onSelectDate?.(targetDateStr);
   };
 
   // Day navigation handlers (Previous Day / Next Day)
@@ -630,7 +692,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
         dateStr,
         dayNumber: d,
         isCurrentMonth: true,
-        isToday: dateStr === '2026-11-13',
+        isToday: dateStr === todayDateStr,
         isSelected: dateStr === selectedDate,
         dayEvents: eventsByDate.get(dateStr) || [],
         conflict: conflictsByDate.get(dateStr)
@@ -658,7 +720,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
     }
 
     return days;
-  }, [year, month, selectedDate, eventsByDate, conflictsByDate]);
+  }, [year, month, selectedDate, eventsByDate, conflictsByDate, todayDateStr]);
 
   // Formatted date string for selected date agenda header
   const formattedSelectedHeader = useMemo(() => {
@@ -682,51 +744,62 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
       {/* ============================================================ */}
       {/* 1. TOP CALENDAR CONTROLS & MONTH/YEAR NAVIGATION             */}
       {/* ============================================================ */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-[#E8E5BA]">
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#E2DDD0]">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#172D50] text-[#F2EE98] flex items-center justify-center font-bold shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-[#172B4D] text-[#D9A928] flex items-center justify-center font-bold shadow-xs">
             <CalendarIcon className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#172D50] flex items-center gap-2">
+            <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#172B4D] flex items-center gap-2">
               <span>{MONTH_NAMES[month]} {year}</span>
             </h2>
-            <span className="text-xs font-mono text-[#172D50]/60">
-              Personal Academic Calendar · {events.length} Synchronized Events
-            </span>
+            <div className="flex items-center gap-2 text-xs font-mono text-[#172B4D]/70">
+              <span>Personal Academic Calendar · {events.length} Synchronized Events</span>
+              {selectedDate === '2026-11-13' && (
+                <span className="px-1.5 py-0.5 rounded bg-[#79C8D0]/20 text-[#172B4D] text-[10px] font-bold border border-[#79C8D0]/40">
+                  Specimen Date
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Quick Date Picker Input */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono">
-            <span className="text-[#172D50]/60 hidden sm:inline">Jump to:</span>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => {
-                if (e.target.value) setSelectedDate(e.target.value);
-              }}
-              className="bg-transparent text-[#172D50] font-semibold focus:outline-hidden cursor-pointer"
-            />
-          </div>
-
-          {/* Today Button */}
-          <button
-            type="button"
-            onClick={handleToday}
-            className="px-3 py-1.5 rounded-lg bg-[#FAF8DB] hover:bg-[#F2EE98]/40 border border-[#E8E5BA] text-xs font-mono font-semibold text-[#172D50] transition-colors cursor-pointer"
+          {/* Month Dropdown */}
+          <select
+            value={month}
+            onChange={(e) => handleSelectMonth(Number(e.target.value))}
+            aria-label="Select month"
+            className="px-2.5 py-1.5 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] text-xs font-mono font-semibold text-[#172B4D] hover:border-[#172B4D] focus:outline-hidden cursor-pointer"
           >
-            Today
-          </button>
+            {MONTH_NAMES.map((mName, idx) => (
+              <option key={mName} value={idx}>
+                {mName}
+              </option>
+            ))}
+          </select>
+
+          {/* Year Dropdown */}
+          <select
+            value={year}
+            onChange={(e) => handleSelectYear(Number(e.target.value))}
+            aria-label="Select year"
+            className="px-2.5 py-1.5 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] text-xs font-mono font-semibold text-[#172B4D] hover:border-[#172B4D] focus:outline-hidden cursor-pointer"
+          >
+            {YEAR_OPTIONS.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
 
           {/* Month Prev / Next buttons */}
-          <div className="flex items-center rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] p-0.5">
+          <div className="flex items-center rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] p-0.5">
             <button
               type="button"
               onClick={handlePrevMonth}
               aria-label="Previous Month"
-              className="p-1.5 rounded text-[#172D50]/70 hover:text-[#172D50] hover:bg-[#FEFDE6] transition-colors cursor-pointer"
+              className="p-1.5 rounded text-[#172B4D]/70 hover:text-[#172B4D] hover:bg-[#F7F4E9] transition-colors cursor-pointer"
               title="Previous Month"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -735,20 +808,43 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
               type="button"
               onClick={handleNextMonth}
               aria-label="Next Month"
-              className="p-1.5 rounded text-[#172D50]/70 hover:text-[#172D50] hover:bg-[#FEFDE6] transition-colors cursor-pointer"
+              className="p-1.5 rounded text-[#172B4D]/70 hover:text-[#172B4D] hover:bg-[#F7F4E9] transition-colors cursor-pointer"
               title="Next Month"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
+          {/* Today Button */}
+          <button
+            type="button"
+            onClick={handleToday}
+            className="px-3 py-1.5 rounded-lg bg-[#D9A928] hover:bg-[#C89820] text-[#172B4D] text-xs font-mono font-bold transition-colors cursor-pointer shadow-xs"
+            title={`Go to real today (${todayDateStr})`}
+          >
+            Today
+          </button>
+
+          {/* Quick Date Picker Input */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] text-xs font-mono">
+            <span className="text-[#172B4D]/60 hidden sm:inline">Jump:</span>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                if (e.target.value) setSelectedDate(e.target.value);
+              }}
+              className="bg-transparent text-[#172B4D] font-semibold focus:outline-hidden cursor-pointer"
+            />
+          </div>
+
           {/* Add Event Button */}
           <button
             type="button"
             onClick={() => handleOpenAddEvent()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-colors text-xs font-mono font-medium shadow-xs cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#172B4D] text-[#FFFDF7] hover:bg-[#244270] transition-colors text-xs font-mono font-medium shadow-xs cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5 text-[#F2EE98]" />
+            <Plus className="w-3.5 h-3.5 text-[#D9A928]" />
             <span>Add Event</span>
           </button>
 
@@ -757,7 +853,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             type="button"
             onClick={handleExportFullCalendar}
             title="Export calendar schedule to .ics"
-            className="p-2 rounded-lg bg-[#FAF8DB] hover:bg-[#F2EE98]/40 border border-[#E8E5BA] text-[#172D50] transition-colors cursor-pointer"
+            className="p-2 rounded-lg bg-[#FFFDF7] hover:bg-[#F7F4E9] border border-[#E2DDD0] text-[#172B4D] transition-colors cursor-pointer"
           >
             <Download className="w-4 h-4" />
           </button>
@@ -767,21 +863,21 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
       {/* ============================================================ */}
       {/* 2. SECTION: INTERACTIVE DAILY TIMELINE (Selected Date)       */}
       {/* ============================================================ */}
-      <div className="bg-[#FAF8DB]/90 border border-[#E8E5BA] rounded-2xl p-6 sm:p-8 shadow-xs relative overflow-hidden transition-all">
+      <div className="bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-6 sm:p-8 shadow-xs relative overflow-hidden transition-all">
         
         {/* Daily Timeline Controls Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-3 border-b border-[#E8E5BA]/70">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-3 border-b border-[#E2DDD0]/80">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="w-2 h-2 rounded-full bg-[#10380B] animate-pulse"></span>
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#10380B]">
+              <span className="w-2 h-2 rounded-full bg-[#172B4D] animate-pulse"></span>
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#172B4D]">
                 Daily Timeline View
               </span>
-              <span className="text-[11px] font-mono text-[#172D50]/60">
+              <span className="text-[11px] font-mono text-[#172B4D]/60">
                 ({selectedDate})
               </span>
             </div>
-            <h3 className="text-lg sm:text-xl font-serif font-bold text-[#172D50]">
+            <h3 className="text-lg sm:text-xl font-serif font-bold text-[#172B4D]">
               {selectedDateConflict?.hasConflict 
                 ? 'Start time looks free, the meeting is not' 
                 : `${formattedSelectedHeader} · Schedule`}
@@ -793,7 +889,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             <button
               type="button"
               onClick={handlePrevDay}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] hover:bg-[#FAF8DB] transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] transition-colors cursor-pointer"
               title="Previous Day"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
@@ -803,7 +899,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             <button
               type="button"
               onClick={handleNextDay}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] hover:bg-[#FAF8DB] transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] transition-colors cursor-pointer"
               title="Next Day"
             >
               <span>Next Day</span>
@@ -817,7 +913,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
           {timelineData.ticks.map((t) => (
             <span
               key={t.minute}
-              className="absolute text-xs sm:text-sm font-mono text-[#172D50]/60 -translate-x-1/2 select-none"
+              className="absolute text-xs sm:text-sm font-mono text-[#172B4D]/60 -translate-x-1/2 select-none"
               style={{ left: `${t.pct}%` }}
             >
               {t.label}
@@ -828,7 +924,6 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
         {/* Interactive Time Canvas (Clicking empty slot opens Add Event) */}
         <div 
           onClick={(e) => {
-            // If user clicked the canvas background (not an event bar)
             if (e.target === e.currentTarget || (e.target as HTMLElement).hasAttribute('data-slot-bg')) {
               const rect = e.currentTarget.getBoundingClientRect();
               const clickX = e.clientX - rect.left;
@@ -841,14 +936,14 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             }
           }}
           title="Click empty slot to schedule an event"
-          className="relative w-full py-4 space-y-3.5 min-h-[140px] flex flex-col justify-center cursor-pointer select-none rounded-xl bg-[#FAF8DB]/40 border border-dashed border-[#E8E5BA]/60"
+          className="relative w-full py-4 space-y-3.5 min-h-[140px] flex flex-col justify-center cursor-pointer select-none rounded-xl bg-[#F7F4E9]/60 border border-dashed border-[#E2DDD0]"
         >
           {/* Vertical Grid Lines for each tick */}
           {timelineData.ticks.map((t) => (
             <div
               key={`line-${t.minute}`}
               data-slot-bg="true"
-              className="absolute top-0 bottom-0 border-l border-[#E8E5BA] pointer-events-none"
+              className="absolute top-0 bottom-0 border-l border-[#E2DDD0]"
               style={{ left: `${t.pct}%` }}
               aria-hidden="true"
             />
@@ -857,7 +952,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
           {/* Red Dashed Marker 1: Overlap Start */}
           {selectedDateConflict?.hasConflict && (
             <div
-              className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#dc2626] z-20 pointer-events-none transition-all duration-300"
+              className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#D9574F] z-20 pointer-events-none transition-all duration-300"
               style={{ left: `${timelineData.marker1Pct}%` }}
               aria-hidden="true"
             />
@@ -866,7 +961,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
           {/* Red Dashed Marker 2: Overlap Boundary */}
           {selectedDateConflict?.hasConflict && (
             <div
-              className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#dc2626] z-20 pointer-events-none transition-all duration-300"
+              className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#D9574F] z-20 pointer-events-none transition-all duration-300"
               style={{ left: `${timelineData.marker2Pct}%` }}
               aria-hidden="true"
             />
@@ -875,7 +970,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
           {/* Shaded Pale Overlap Region */}
           {selectedDateConflict?.hasConflict && (
             <div
-              className="absolute top-0 bottom-0 bg-[#dc2626]/10 z-10 pointer-events-none transition-all duration-300"
+              className="absolute top-0 bottom-0 bg-[#D9574F]/15 z-10 pointer-events-none transition-all duration-300"
               style={{
                 left: `${timelineData.overlapLeftPct}%`,
                 width: `${timelineData.overlapWidthPct}%`
@@ -898,15 +993,15 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                   title={`${ev.title} (${ev.startTime}–${ev.endTime}) - Click to view/edit details`}
                   className={`absolute h-full rounded-lg font-mono text-xs sm:text-sm font-semibold flex items-center justify-between px-3.5 shadow-2xs tracking-tight transition-all duration-300 truncate text-left cursor-pointer hover:brightness-105 active:scale-[0.99] border ${
                     ev.color === 'cyan'
-                      ? 'bg-[#06b6d4] text-[#0f172a] border-[#0891b2]'
+                      ? 'bg-[#79C8D0] text-[#172B4D] border-[#5EAEB6]'
                       : ev.color === 'blue'
-                      ? 'bg-[#1d4ed8] text-white border-[#1e40af]'
+                      ? 'bg-[#8FB7E8] text-[#172B4D] border-[#6FA0D8]'
                       : ev.color === 'rose'
-                      ? 'bg-[#dc2626] text-white border-[#b91c1c]'
+                      ? 'bg-[#D9574F] text-white border-[#B83E37]'
                       : ev.color === 'forest'
-                      ? 'bg-[#10380B] text-[#FEFDE6] border-[#0b2607]'
-                      : 'bg-[#f59e0b] text-[#172D50] border-[#d97706]'
-                  } ${selectedTimelineEventId === ev.id ? 'ring-2 ring-[#172D50]' : ''}`}
+                      ? 'bg-[#A8B8A0] text-[#172B4D] border-[#8E9F86]'
+                      : 'bg-[#D9A928] text-[#172B4D] border-[#B88C1A]'
+                  } ${selectedTimelineEventId === ev.id ? 'ring-2 ring-[#172B4D]' : ''}`}
                   style={{
                     left: `${ev.leftPct}%`,
                     width: `${ev.widthPct}%`
@@ -922,7 +1017,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
               </div>
             ))
           ) : (
-            <div data-slot-bg="true" className="text-center py-6 text-xs font-mono text-[#172D50]/40">
+            <div data-slot-bg="true" className="text-center py-6 text-xs font-mono text-[#172B4D]/50">
               No timed events on this date. Click anywhere on this timeline to schedule a slot.
             </div>
           )}
@@ -931,7 +1026,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
         {/* Red Overlap Caption / Conflict Status */}
         <div className="relative mt-4 flex items-center justify-center text-center">
           <p className={`text-xs sm:text-sm font-mono font-semibold transition-all ${
-            selectedDateConflict?.hasConflict ? 'text-[#dc2626]' : 'text-[#10380B]'
+            selectedDateConflict?.hasConflict ? 'text-[#D9574F]' : 'text-[#A8B8A0]'
           }`}>
             {selectedDateConflict?.hasConflict
               ? `${selectedDateConflict.overlapMinutes} min overlap: check the full duration`
@@ -940,13 +1035,13 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
         </div>
 
         {/* Timeline Interactive Controls & Quick Shift Bar */}
-        <div className="mt-5 pt-3 border-t border-[#E8E5BA]/60 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-[#172D50]">
+        <div className="mt-5 pt-3 border-t border-[#E2DDD0]/80 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-[#172B4D]">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[#172D50]/60 text-[11px]">Selected:</span>
+            <span className="text-[#172B4D]/60 text-[11px]">Selected:</span>
             <select
               value={selectedTimelineEventId}
               onChange={(e) => setSelectedTimelineEventId(e.target.value)}
-              className="px-2.5 py-1 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] font-semibold text-xs cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] font-semibold text-xs cursor-pointer"
             >
               {selectedDateEvents.map(ev => (
                 <option key={ev.id} value={ev.id}>
@@ -956,11 +1051,11 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             </select>
 
             {/* Quick Shift Buttons */}
-            <span className="text-[#172D50]/60 text-[11px] ml-2">Shift:</span>
+            <span className="text-[#172B4D]/60 text-[11px] ml-2">Shift:</span>
             <button
               type="button"
               onClick={() => handleShiftTimelineEvent(-15)}
-              className="px-2 py-1 rounded bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] hover:bg-[#FAF8DB] cursor-pointer"
+              className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
               title="Shift -15 minutes"
             >
               -15m
@@ -968,7 +1063,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             <button
               type="button"
               onClick={() => handleShiftTimelineEvent(15)}
-              className="px-2 py-1 rounded bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] hover:bg-[#FAF8DB] cursor-pointer"
+              className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
               title="Shift +15 minutes"
             >
               +15m
@@ -976,7 +1071,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             <button
               type="button"
               onClick={() => handleShiftTimelineEvent(30)}
-              className="px-2 py-1 rounded bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] hover:bg-[#FAF8DB] cursor-pointer"
+              className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
               title="Shift +30 minutes"
             >
               +30m
@@ -986,7 +1081,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
               <button
                 type="button"
                 onClick={() => handleOpenEditEvent(selectedTimelineEvent)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50] hover:bg-[#FAF8DB] cursor-pointer ml-2"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer ml-2"
               >
                 <Edit3 className="w-3 h-3" />
                 <span>Edit</span>
@@ -998,7 +1093,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             <button
               type="button"
               onClick={() => handlePromptDelete(selectedTimelineEvent)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#FFF0F0] border border-[#FCA5A5] text-[#dc2626] hover:bg-[#FEE2E2] cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#FFF0F0] border border-[#FCA5A5] text-[#D9574F] hover:bg-[#FEE2E2] cursor-pointer"
               title="Delete Selected Event"
             >
               <Trash2 className="w-3 h-3" />
@@ -1011,19 +1106,19 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
       {/* ============================================================ */}
       {/* 3. SECTION: INTERACTIVE MONTHLY CALENDAR GRID               */}
       {/* ============================================================ */}
-      <div className="bg-[#FAF8DB]/90 border border-[#E8E5BA] rounded-2xl p-4 sm:p-6 shadow-xs relative overflow-hidden">
+      <div className="bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-4 sm:p-6 shadow-xs relative overflow-hidden">
         
-        <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E8E5BA]/60 text-xs font-mono">
-          <span className="font-bold text-[#172D50] uppercase tracking-wider">
+        <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E2DDD0]/80 text-xs font-mono">
+          <span className="font-bold text-[#172B4D] uppercase tracking-wider">
             Monthly Calendar Grid
           </span>
-          <span className="text-[#172D50]/60">
+          <span className="text-[#172B4D]/60">
             Click any date to view agenda · Click empty area to add event
           </span>
         </div>
 
         {/* Days of Week Header */}
-        <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center font-mono text-xs font-bold text-[#172D50]/70 mb-2">
+        <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center font-mono text-xs font-bold text-[#172B4D]/70 mb-2">
           {DAY_NAMES.map(day => (
             <div key={day} className="py-1 uppercase tracking-wider">
               {day}
@@ -1043,31 +1138,29 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
               <div
                 key={cell.dateStr}
                 onClick={(e) => {
-                  // If user clicked cell background (not an event label)
                   setSelectedDate(cell.dateStr);
                   if (e.target === e.currentTarget) {
-                    // Open add event for that date
                     handleOpenAddEvent(cell.dateStr);
                   }
                 }}
                 className={`min-h-[95px] sm:min-h-[110px] p-1.5 sm:p-2 rounded-xl border flex flex-col justify-between transition-all cursor-pointer relative ${
                   isSelected
-                    ? 'bg-[#FEFDE6] border-[#172D50] ring-2 ring-[#172D50]/20 shadow-xs'
+                    ? 'bg-[#F7F4E9] border-[#172B4D] ring-2 ring-[#172B4D]/25 shadow-xs'
                     : cell.isCurrentMonth
-                    ? 'bg-[#FEFDE6]/80 border-[#E8E5BA] hover:bg-[#FEFDE6] hover:border-[#172D50]/40'
-                    : 'bg-[#FAF8DB]/30 border-[#E8E5BA]/40 opacity-40 hover:opacity-70'
+                    ? 'bg-[#FFFDF7] border-[#E2DDD0] hover:bg-[#F7F4E9]/50 hover:border-[#172B4D]/40'
+                    : 'bg-[#F7F4E9]/30 border-[#E2DDD0]/40 opacity-40 hover:opacity-75'
                 }`}
               >
                 {/* Top Row: Date Number & Badges */}
                 <div className="flex items-center justify-between mb-1 pointer-events-none">
                   <span className={`font-mono text-xs sm:text-sm font-bold ${
                     isSelected
-                      ? 'text-[#172D50] w-6 h-6 rounded-full bg-[#FAF8DB] border border-[#172D50] flex items-center justify-center'
+                      ? 'text-white w-6 h-6 rounded-full bg-[#172B4D] flex items-center justify-center'
                       : cell.isToday
-                      ? 'text-[#10380B] font-black'
+                      ? 'text-[#172B4D] w-6 h-6 rounded-full bg-[#D9A928] font-bold flex items-center justify-center'
                       : cell.isCurrentMonth
-                      ? 'text-[#172D50]'
-                      : 'text-[#172D50]/40'
+                      ? 'text-[#172B4D]'
+                      : 'text-[#172B4D]/40'
                   }`}>
                     {cell.dayNumber}
                   </span>
@@ -1076,7 +1169,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                   {hasConflict && (
                     <span 
                       title={`${cell.conflict?.overlapMinutes} min conflict on this day`}
-                      className="w-4 h-4 rounded-full bg-[#FFF0F0] border border-[#FCA5A5] text-[#dc2626] flex items-center justify-center text-[10px] font-bold"
+                      className="w-4 h-4 rounded-full bg-[#FFF0F0] border border-[#FCA5A5] text-[#D9574F] flex items-center justify-center text-[10px] font-bold"
                     >
                       !
                     </span>
@@ -1097,21 +1190,21 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                       title={`${ev.title} (${ev.startTime}–${ev.endTime}) - Click to inspect/edit`}
                       className={`w-full px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-mono font-medium truncate flex items-center gap-1 border text-left cursor-pointer hover:brightness-95 ${
                         ev.color === 'cyan'
-                          ? 'bg-[#ECFEFF] text-[#0891b2] border-[#A5F3FC]'
+                          ? 'bg-[#79C8D0]/20 text-[#172B4D] border-[#79C8D0]/60'
                           : ev.color === 'blue'
-                          ? 'bg-[#EFF6FF] text-[#1d4ed8] border-[#BFDBFE]'
+                          ? 'bg-[#8FB7E8]/20 text-[#172B4D] border-[#8FB7E8]/60'
                           : ev.color === 'rose'
-                          ? 'bg-[#FFF1F2] text-[#e11d48] border-[#FECDD3]'
+                          ? 'bg-[#D9574F]/15 text-[#B83E37] border-[#D9574F]/40'
                           : ev.color === 'forest'
-                          ? 'bg-[#F0FDF4] text-[#15803d] border-[#BBF7D0]'
-                          : 'bg-[#FFFBEB] text-[#d97706] border-[#FDE68A]'
+                          ? 'bg-[#A8B8A0]/25 text-[#172B4D] border-[#A8B8A0]/60'
+                          : 'bg-[#D9A928]/20 text-[#172B4D] border-[#D9A928]/60'
                       }`}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        ev.color === 'cyan' ? 'bg-[#0891b2]' :
-                        ev.color === 'blue' ? 'bg-[#1d4ed8]' :
-                        ev.color === 'rose' ? 'bg-[#e11d48]' :
-                        ev.color === 'forest' ? 'bg-[#15803d]' : 'bg-[#d97706]'
+                        ev.color === 'cyan' ? 'bg-[#79C8D0]' :
+                        ev.color === 'blue' ? 'bg-[#8FB7E8]' :
+                        ev.color === 'rose' ? 'bg-[#D9574F]' :
+                        ev.color === 'forest' ? 'bg-[#A8B8A0]' : 'bg-[#D9A928]'
                       }`} />
                       <span className="truncate">{ev.title}</span>
                     </button>
@@ -1126,7 +1219,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                         setSelectedDate(cell.dateStr);
                         setMorePopoverDate(prev => prev === cell.dateStr ? null : cell.dateStr);
                       }}
-                      className="text-[10px] font-mono text-[#172D50] hover:text-[#E65100] pl-1 font-semibold block text-left cursor-pointer underline"
+                      className="text-[10px] font-mono text-[#172B4D] hover:text-[#D9A928] pl-1 font-semibold block text-left cursor-pointer underline"
                       title="View all events on this day"
                     >
                       +{overflowCount} more
@@ -1141,10 +1234,10 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                       <span
                         key={i}
                         className={`w-1 h-1 rounded-full ${
-                          ev.color === 'cyan' ? 'bg-[#06b6d4]' :
-                          ev.color === 'blue' ? 'bg-[#1d4ed8]' :
-                          ev.color === 'rose' ? 'bg-[#dc2626]' :
-                          ev.color === 'forest' ? 'bg-[#10380B]' : 'bg-[#f59e0b]'
+                          ev.color === 'cyan' ? 'bg-[#79C8D0]' :
+                          ev.color === 'blue' ? 'bg-[#8FB7E8]' :
+                          ev.color === 'rose' ? 'bg-[#D9574F]' :
+                          ev.color === 'forest' ? 'bg-[#A8B8A0]' : 'bg-[#D9A928]'
                         }`}
                       />
                     ))}
@@ -1157,15 +1250,15 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
 
         {/* Interactive +N More Popover */}
         {morePopoverDate && (
-          <div className="absolute inset-x-6 top-16 z-30 bg-[#FEFDE6] border-2 border-[#172D50] rounded-2xl p-5 shadow-2xl animate-fade-in font-mono text-xs">
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E8E5BA]">
-              <span className="font-serif font-bold text-sm text-[#172D50]">
+          <div className="absolute inset-x-6 top-16 z-30 bg-[#FFFDF7] border-2 border-[#172B4D] rounded-2xl p-5 shadow-2xl animate-fade-in font-mono text-xs">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E2DDD0]">
+              <span className="font-serif font-bold text-sm text-[#172B4D]">
                 All Events for {morePopoverDate}
               </span>
               <button
                 type="button"
                 onClick={() => setMorePopoverDate(null)}
-                className="text-[#172D50]/60 hover:text-[#172D50] cursor-pointer"
+                className="text-[#172B4D]/60 hover:text-[#172B4D] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1179,18 +1272,18 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                     handleOpenEditEvent(ev);
                     setMorePopoverDate(null);
                   }}
-                  className="p-2.5 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] hover:border-[#172D50] flex items-center justify-between gap-3 cursor-pointer"
+                  className="p-2.5 rounded-lg bg-[#F7F4E9] border border-[#E2DDD0] hover:border-[#172B4D] flex items-center justify-between gap-3 cursor-pointer"
                 >
                   <div className="flex items-center gap-2">
                     <span className={`w-2.5 h-2.5 rounded-full ${
-                      ev.color === 'cyan' ? 'bg-[#06b6d4]' :
-                      ev.color === 'blue' ? 'bg-[#1d4ed8]' :
-                      ev.color === 'rose' ? 'bg-[#dc2626]' :
-                      ev.color === 'forest' ? 'bg-[#10380B]' : 'bg-[#f59e0b]'
+                      ev.color === 'cyan' ? 'bg-[#79C8D0]' :
+                      ev.color === 'blue' ? 'bg-[#8FB7E8]' :
+                      ev.color === 'rose' ? 'bg-[#D9574F]' :
+                      ev.color === 'forest' ? 'bg-[#A8B8A0]' : 'bg-[#D9A928]'
                     }`} />
-                    <span className="font-bold text-[#172D50]">{ev.title}</span>
+                    <span className="font-bold text-[#172B4D]">{ev.title}</span>
                   </div>
-                  <span className="text-[#172D50]/70">{ev.startTime}–{ev.endTime}</span>
+                  <span className="text-[#172B4D]/70">{ev.startTime}–{ev.endTime}</span>
                 </div>
               ))}
             </div>
@@ -1201,20 +1294,20 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
       {/* ============================================================ */}
       {/* 4. SECTION: INTERACTIVE SELECTED-DAY AGENDA                 */}
       {/* ============================================================ */}
-      <div className="bg-[#FEFDE6] border border-[#172D50]/20 rounded-2xl p-6 sm:p-8 shadow-xs animate-fade-in">
+      <div className="bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-6 sm:p-8 shadow-xs animate-fade-in">
         
         {/* Agenda Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-[#E8E5BA]">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 mb-6 border-b border-[#E2DDD0]">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-[#FAF8DB] border border-[#E8E5BA] text-[#10380B]">
-                {selectedDate === '2026-11-13' ? 'TODAY' : selectedDate === '2026-11-14' ? 'TOMORROW' : 'AGENDA'}
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-[#F7F4E9] border border-[#E2DDD0] text-[#172B4D]">
+                {selectedDate === todayDateStr ? 'TODAY' : selectedDate === '2026-11-13' ? 'SPECIMEN DAY' : 'AGENDA'}
               </span>
-              <span className="text-xs font-mono text-[#172D50]/60">
+              <span className="text-xs font-mono text-[#172B4D]/60">
                 {selectedDateEvents.length} Scheduled Activities
               </span>
             </div>
-            <h3 className="text-xl sm:text-2xl font-serif font-bold text-[#172D50]">
+            <h3 className="text-xl sm:text-2xl font-serif font-bold text-[#172B4D]">
               {formattedSelectedHeader}
             </h3>
           </div>
@@ -1223,9 +1316,9 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             <button
               type="button"
               onClick={() => handleOpenAddEvent(selectedDate)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-colors text-xs font-mono font-medium shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#172B4D] text-[#FFFDF7] hover:bg-[#244270] transition-colors text-xs font-mono font-medium shadow-xs cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5 text-[#F2EE98]" />
+              <Plus className="w-3.5 h-3.5 text-[#D9A928]" />
               <span>Add Event to this Date</span>
             </button>
           </div>
@@ -1233,14 +1326,14 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
 
         {/* Conflict Warning Banner in Agenda */}
         {selectedDateConflict?.hasConflict && (
-          <div className="mb-6 p-4 rounded-xl bg-[#FFF0F0] border border-[#FCA5A5] text-xs font-mono text-[#B91C1C] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="mb-6 p-4 rounded-xl bg-[#FFF0F0] border border-[#FCA5A5] text-xs font-mono text-[#D9574F] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
             <div className="flex items-start gap-2.5">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold block">
                   Schedule Conflict Detected: {selectedDateConflict.overlapMinutes} min overlap
                 </span>
-                <span className="text-[11px] text-[#B91C1C]/80 block mt-0.5">
+                <span className="text-[11px] text-[#D9574F]/90 block mt-0.5">
                   {selectedDateConflict.description}
                 </span>
               </div>
@@ -1255,7 +1348,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                     selectedDateConflict.suggestedSlot!.start,
                     selectedDateConflict.suggestedSlot!.end
                   )}
-                  className="px-3 py-1.5 rounded-lg bg-[#B91C1C] text-white hover:bg-[#991B1B] transition-colors font-semibold text-[11px] cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-[#D9574F] text-white hover:bg-[#B83E37] transition-colors font-semibold text-[11px] cursor-pointer"
                 >
                   Apply Suggested Free Slot ({selectedDateConflict.suggestedSlot.start})
                 </button>
@@ -1275,37 +1368,37 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                 <div
                   key={ev.id}
                   onClick={() => handleOpenEditEvent(ev)}
-                  className="p-5 rounded-xl bg-[#FAF8DB]/60 border border-[#E8E5BA] hover:bg-[#FAF8DB] hover:border-[#172D50]/40 transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-4 shadow-2xs cursor-pointer"
+                  className="p-5 rounded-xl bg-[#F7F4E9]/50 border border-[#E2DDD0] hover:bg-[#F7F4E9] hover:border-[#172B4D]/40 transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-4 shadow-2xs cursor-pointer"
                 >
                   <div className="flex items-start gap-3.5">
                     {/* Category Dot */}
                     <span className={`w-3.5 h-3.5 rounded-full mt-1 shrink-0 ${
-                      ev.color === 'cyan' ? 'bg-[#06b6d4]' :
-                      ev.color === 'blue' ? 'bg-[#1d4ed8]' :
-                      ev.color === 'rose' ? 'bg-[#dc2626]' :
-                      ev.color === 'forest' ? 'bg-[#10380B]' : 'bg-[#f59e0b]'
+                      ev.color === 'cyan' ? 'bg-[#79C8D0]' :
+                      ev.color === 'blue' ? 'bg-[#8FB7E8]' :
+                      ev.color === 'rose' ? 'bg-[#D9574F]' :
+                      ev.color === 'forest' ? 'bg-[#A8B8A0]' : 'bg-[#D9A928]'
                     }`} />
 
                     <div>
                       {/* Title & Category Badge */}
                       <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <h4 className="font-serif font-bold text-base text-[#172D50]">
+                        <h4 className="font-serif font-bold text-base text-[#172B4D]">
                           {ev.title}
                         </h4>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50]/70">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D]/80">
                           {ev.category}
                         </span>
                         {ev.sourceNoticeTitle && (
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#E8E5BA]/40 text-[#172D50]/80">
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#E2DDD0]/50 text-[#172B4D]/90">
                             Source: {ev.sourceNoticeTitle}
                           </span>
                         )}
                       </div>
 
                       {/* Time & Venue */}
-                      <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-[#172D50]/70 mb-2">
-                        <span className="flex items-center gap-1.5 font-semibold text-[#172D50]">
-                          <Clock className="w-3.5 h-3.5 text-[#172D50]" />
+                      <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-[#172B4D]/75 mb-2">
+                        <span className="flex items-center gap-1.5 font-semibold text-[#172B4D]">
+                          <Clock className="w-3.5 h-3.5 text-[#172B4D]" />
                           {ev.isAllDay ? 'All Day Deadline' : `${startFormatted} – ${endFormatted}`}
                         </span>
 
@@ -1317,7 +1410,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                         )}
 
                         {ev.reminderMinutes && (
-                          <span className="flex items-center gap-1 text-[11px] text-[#10380B]">
+                          <span className="flex items-center gap-1 text-[11px] text-[#A8B8A0]">
                             <Bell className="w-3 h-3" />
                             {ev.reminderMinutes}m reminder
                           </span>
@@ -1326,14 +1419,14 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
 
                       {/* Description */}
                       {ev.description && (
-                        <p className="text-xs text-[#172D50]/80 font-sans leading-relaxed">
+                        <p className="text-xs text-[#172B4D]/80 font-sans leading-relaxed">
                           {ev.description}
                         </p>
                       )}
 
                       {/* Audit Flag from Notice Decoder if any */}
                       {ev.uncertainFlags && ev.uncertainFlags.length > 0 && (
-                        <div className="mt-2 p-2 rounded bg-[#FFF8E1] border border-[#FFE082] text-[11px] font-mono text-[#E65100]">
+                        <div className="mt-2 p-2 rounded bg-[#FFF8E6] border border-[#EED17D] text-[11px] font-mono text-[#D9A928]">
                           ⚠ Audit Flag: {ev.uncertainFlags[0].reason}
                         </div>
                       )}
@@ -1348,7 +1441,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                         e.stopPropagation();
                         handleOpenEditEvent(ev);
                       }}
-                      className="p-1.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] text-[#172D50]/70 hover:text-[#172D50] hover:bg-[#FAF8DB] transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D]/70 hover:text-[#172B4D] hover:bg-[#F7F4E9] transition-colors cursor-pointer"
                       title="Edit Event"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
@@ -1360,7 +1453,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                         e.stopPropagation();
                         handlePromptDelete(ev);
                       }}
-                      className="p-1.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] text-[#dc2626]/70 hover:text-[#dc2626] hover:bg-[#FFF0F0] transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] text-[#D9574F]/70 hover:text-[#D9574F] hover:bg-[#FFF0F0] transition-colors cursor-pointer"
                       title="Delete Event"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -1371,20 +1464,20 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             })}
           </div>
         ) : (
-          <div className="py-12 px-6 rounded-xl bg-[#FAF8DB]/30 border border-dashed border-[#E8E5BA] text-center">
-            <CalendarIcon className="w-8 h-8 text-[#172D50]/30 mx-auto mb-2" />
-            <h4 className="font-serif font-bold text-base text-[#172D50]">
+          <div className="py-12 px-6 rounded-xl bg-[#F7F4E9]/30 border border-dashed border-[#E2DDD0] text-center">
+            <CalendarIcon className="w-8 h-8 text-[#172B4D]/30 mx-auto mb-2" />
+            <h4 className="font-serif font-bold text-base text-[#172B4D]">
               No Events Scheduled for this Date
             </h4>
-            <p className="text-xs text-[#172D50]/60 font-sans mt-1">
+            <p className="text-xs text-[#172B4D]/60 font-sans mt-1">
               Select another date on the calendar above or click &ldquo;Add Event to this Date&rdquo; to plan a session.
             </p>
             <button
               type="button"
               onClick={() => handleOpenAddEvent(selectedDate)}
-              className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#172D50] text-[#FEFDE6] text-xs font-mono font-medium shadow-xs cursor-pointer"
+              className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#172B4D] text-[#FFFDF7] text-xs font-mono font-medium shadow-xs cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5 text-[#F2EE98]" />
+              <Plus className="w-3.5 h-3.5 text-[#D9A928]" />
               <span>Create Event on {selectedDate}</span>
             </button>
           </div>
@@ -1396,22 +1489,22 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
       {/* ============================================================ */}
       {isEditorOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-[#FEFDE6] border border-[#E8E5BA] rounded-2xl p-6 shadow-xl animate-fade-in font-mono text-xs">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#E8E5BA]">
-              <span className="font-serif font-bold text-base text-[#172D50]">
+          <div className="w-full max-w-lg bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-6 shadow-xl animate-fade-in font-mono text-xs">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#E2DDD0]">
+              <span className="font-serif font-bold text-base text-[#172B4D]">
                 {editingEventId ? 'Edit Academic Event' : 'Add New Academic Event'}
               </span>
               <button
                 type="button"
                 onClick={() => setIsEditorOpen(false)}
-                className="text-[#172D50]/60 hover:text-[#172D50] cursor-pointer"
+                className="text-[#172B4D]/60 hover:text-[#172B4D] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {formError && (
-              <div className="mb-4 p-3 rounded-lg bg-[#FFF0F0] border border-[#FCA5A5] text-[#B91C1C] flex items-center gap-2">
+              <div className="mb-4 p-3 rounded-lg bg-[#FFF0F0] border border-[#FCA5A5] text-[#D9574F] flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>{formError}</span>
               </div>
@@ -1419,50 +1512,50 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
 
             <form onSubmit={handleSaveEvent} className="space-y-4">
               <div>
-                <label className="block text-[#172D50] font-medium mb-1">Event Title *</label>
+                <label className="block text-[#172B4D] font-medium mb-1">Event Title *</label>
                 <input
                   type="text"
                   required
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   placeholder="e.g. CSA Examination Review"
-                  className="w-full px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden focus:border-[#172D50]"
+                  className="w-full px-3 py-2 rounded-lg bg-[#F7F4E9]/60 border border-[#E2DDD0] text-[#172B4D] focus:outline-hidden focus:border-[#172B4D] focus:bg-[#FFFDF7]"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[#172D50] font-medium mb-1">Date</label>
+                  <label className="block text-[#172B4D] font-medium mb-1">Date</label>
                   <input
                     type="date"
                     required
                     value={formDate}
                     onChange={(e) => setFormDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden"
+                    className="w-full px-3 py-2 rounded-lg bg-[#F7F4E9]/60 border border-[#E2DDD0] text-[#172B4D] focus:outline-hidden focus:bg-[#FFFDF7]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[#172D50] font-medium mb-1">Start Time</label>
+                  <label className="block text-[#172B4D] font-medium mb-1">Start Time</label>
                   <input
                     type="time"
                     required={!formIsAllDay}
                     disabled={formIsAllDay}
                     value={formStartTime}
                     onChange={(e) => setFormStartTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden disabled:opacity-50"
+                    className="w-full px-3 py-2 rounded-lg bg-[#F7F4E9]/60 border border-[#E2DDD0] text-[#172B4D] focus:outline-hidden focus:bg-[#FFFDF7] disabled:opacity-50"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[#172D50] font-medium mb-1">End Time</label>
+                  <label className="block text-[#172B4D] font-medium mb-1">End Time</label>
                   <input
                     type="time"
                     required={!formIsAllDay}
                     disabled={formIsAllDay}
                     value={formEndTime}
                     onChange={(e) => setFormEndTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden disabled:opacity-50"
+                    className="w-full px-3 py-2 rounded-lg bg-[#F7F4E9]/60 border border-[#E2DDD0] text-[#172B4D] focus:outline-hidden focus:bg-[#FFFDF7] disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -1474,20 +1567,20 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                   id="all-day-checkbox"
                   checked={formIsAllDay}
                   onChange={(e) => setFormIsAllDay(e.target.checked)}
-                  className="rounded border-[#E8E5BA] text-[#172D50] focus:ring-0 cursor-pointer"
+                  className="rounded border-[#E2DDD0] text-[#172B4D] focus:ring-0 cursor-pointer"
                 />
-                <label htmlFor="all-day-checkbox" className="text-xs text-[#172D50] cursor-pointer select-none">
+                <label htmlFor="all-day-checkbox" className="text-xs text-[#172B4D] cursor-pointer select-none">
                   All-day event or deadline (no fixed hour)
                 </label>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[#172D50] font-medium mb-1">Category</label>
+                  <label className="block text-[#172B4D] font-medium mb-1">Category</label>
                   <select
                     value={formCategory}
                     onChange={(e) => setFormCategory(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden cursor-pointer"
+                    className="w-full px-3 py-2 rounded-lg bg-[#F7F4E9]/60 border border-[#E2DDD0] text-[#172B4D] focus:outline-hidden focus:bg-[#FFFDF7] cursor-pointer"
                   >
                     <option value="Meeting">Meeting</option>
                     <option value="Lecture">Lecture</option>
@@ -1499,19 +1592,19 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                 </div>
 
                 <div>
-                  <label className="block text-[#172D50] font-medium mb-1">Venue / Room</label>
+                  <label className="block text-[#172B4D] font-medium mb-1">Venue / Room</label>
                   <input
                     type="text"
                     value={formVenue}
                     onChange={(e) => setFormVenue(e.target.value)}
                     placeholder="e.g. Room 204 or Seminar Hall B"
-                    className="w-full px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden"
+                    className="w-full px-3 py-2 rounded-lg bg-[#F7F4E9]/60 border border-[#E2DDD0] text-[#172B4D] focus:outline-hidden focus:bg-[#FFFDF7]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[#172D50] font-medium mb-1">Color Marker</label>
+                <label className="block text-[#172B4D] font-medium mb-1">Color Marker</label>
                 <div className="flex items-center gap-3 pt-1">
                   {(['cyan', 'blue', 'forest', 'amber', 'rose'] as const).map(c => (
                     <button
@@ -1519,28 +1612,28 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                       type="button"
                       onClick={() => setFormColor(c)}
                       className={`w-7 h-7 rounded-full cursor-pointer border ${
-                        c === 'cyan' ? 'bg-[#06b6d4]' :
-                        c === 'blue' ? 'bg-[#1d4ed8]' :
-                        c === 'rose' ? 'bg-[#dc2626]' :
-                        c === 'forest' ? 'bg-[#10380B]' : 'bg-[#f59e0b]'
-                      } ${formColor === c ? 'ring-2 ring-[#172D50] ring-offset-1' : ''}`}
+                        c === 'cyan' ? 'bg-[#79C8D0]' :
+                        c === 'blue' ? 'bg-[#8FB7E8]' :
+                        c === 'rose' ? 'bg-[#D9574F]' :
+                        c === 'forest' ? 'bg-[#A8B8A0]' : 'bg-[#D9A928]'
+                      } ${formColor === c ? 'ring-2 ring-[#172B4D] ring-offset-1' : ''}`}
                     />
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="block text-[#172D50] font-medium mb-1">Description / Notes</label>
+                <label className="block text-[#172B4D] font-medium mb-1">Description / Notes</label>
                 <textarea
                   rows={2}
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
                   placeholder="Additional agenda notes or preparation details..."
-                  className="w-full px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden"
+                  className="w-full px-3 py-2 rounded-lg bg-[#F7F4E9]/60 border border-[#E2DDD0] text-[#172B4D] focus:outline-hidden focus:bg-[#FFFDF7]"
                 />
               </div>
 
-              <div className="pt-3 border-t border-[#E8E5BA] flex items-center justify-between">
+              <div className="pt-3 border-t border-[#E2DDD0] flex items-center justify-between">
                 {editingEventId ? (
                   <button
                     type="button"
@@ -1548,7 +1641,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                       const ev = events.find(e => e.id === editingEventId);
                       if (ev) handlePromptDelete(ev);
                     }}
-                    className="px-3 py-2 rounded-lg bg-[#FFF0F0] border border-[#FCA5A5] text-[#dc2626] font-semibold hover:bg-[#FEE2E2] transition-colors cursor-pointer"
+                    className="px-3 py-2 rounded-lg bg-[#FFF0F0] border border-[#FCA5A5] text-[#D9574F] font-semibold hover:bg-[#FEE2E2] transition-colors cursor-pointer"
                   >
                     Delete Event
                   </button>
@@ -1560,14 +1653,14 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
                   <button
                     type="button"
                     onClick={() => setIsEditorOpen(false)}
-                    className="px-3.5 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] hover:bg-[#F2EE98]/30 transition-colors cursor-pointer"
+                    className="px-3.5 py-2 rounded-lg bg-[#F7F4E9] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#E2DDD0]/40 transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
 
                   <button
                     type="submit"
-                    className="px-4 py-2 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-colors font-semibold cursor-pointer shadow-xs"
+                    className="px-4 py-2 rounded-lg bg-[#172B4D] text-[#FFFDF7] hover:bg-[#244270] transition-colors font-semibold cursor-pointer shadow-xs"
                   >
                     {editingEventId ? 'Save Changes' : 'Create Event'}
                   </button>
@@ -1583,26 +1676,26 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
       {/* ============================================================ */}
       {eventToDelete && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-[#FEFDE6] border border-[#E8E5BA] rounded-2xl p-6 shadow-xl animate-fade-in font-mono text-xs">
-            <div className="flex items-center gap-2 text-[#dc2626] font-bold text-sm mb-2">
+          <div className="w-full max-w-sm bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-6 shadow-xl animate-fade-in font-mono text-xs">
+            <div className="flex items-center gap-2 text-[#D9574F] font-bold text-sm mb-2">
               <AlertTriangle className="w-5 h-5 shrink-0" />
               <span>Confirm Event Deletion</span>
             </div>
-            <p className="text-[#172D50]/80 font-sans text-xs leading-relaxed mb-4">
+            <p className="text-[#172B4D]/80 font-sans text-xs leading-relaxed mb-4">
               Are you sure you want to delete <strong>&ldquo;{eventToDelete.title}&rdquo;</strong> on {eventToDelete.date}? This will remove it from the daily timeline, monthly grid, and agenda.
             </p>
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8E5BA]">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E2DDD0]">
               <button
                 type="button"
                 onClick={() => setEventToDelete(null)}
-                className="px-3 py-1.5 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] hover:bg-[#F2EE98]/30 cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-[#F7F4E9] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#E2DDD0]/40 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDelete}
-                className="px-3.5 py-1.5 rounded-lg bg-[#dc2626] text-white hover:bg-[#b91c1c] font-semibold cursor-pointer shadow-xs"
+                className="px-3.5 py-1.5 rounded-lg bg-[#D9574F] text-white hover:bg-[#B83E37] font-semibold cursor-pointer shadow-xs"
               >
                 Delete Everywhere
               </button>

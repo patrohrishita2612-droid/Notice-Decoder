@@ -1,19 +1,26 @@
 @import "tailwindcss";
 
 @theme {
-  --color-navy: #172D50;
+  --color-canvas: #F7F4E9;
+  --color-surface: #FFFDF7;
+  --color-surface-card: #F9F6EE;
+  --color-border: #E2DDD0;
+  --color-navy: #172B4D;
   --color-navy-light: #244270;
   --color-navy-dark: #0F1E36;
-  --color-cream: #F2EE98;
+  --color-gold: #D9A928;
+  --color-sage: #A8B8A0;
+  --color-cyan: #79C8D0;
+  --color-blue: #8FB7E8;
+  --color-red: #D9574F;
   --color-forest: #10380B;
-  --color-forest-light: #1A5413;
-  --color-marigold: #FCE519;
-  --color-parchment: #FEFDE6;
-  --color-parchment-card: #FAF8DB;
-  --color-parchment-border: #E8E5BA;
-  --color-orange-accent: #E65100;
-  --color-orange-light: #FFF3E0;
-  --color-orange-border: #FFB74D;
+  --color-cream: #F7F4E9;
+  --color-parchment: #F7F4E9;
+  --color-parchment-card: #FFFDF7;
+  --color-parchment-border: #E2DDD0;
+  --color-orange-accent: #D9A928;
+  --color-orange-light: #FFF8E6;
+  --color-orange-border: #EED17D;
   --font-serif: "Fraunces", Georgia, Cambria, serif;
   --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
@@ -22,8 +29,8 @@
 @layer base {
   body {
     font-family: var(--font-sans);
-    color: var(--color-navy);
-    background-color: var(--color-parchment);
+    color: #172B4D;
+    background-color: #F7F4E9;
     overflow-x: hidden;
   }
 
@@ -38,12 +45,12 @@
   height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: #FEFDE6;
+  background: #F7F4E9;
 }
 ::-webkit-scrollbar-thumb {
-  background: #D9D5A0;
+  background: #D5CFC0;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #172D50;
+  background: #172B4D;
 }
