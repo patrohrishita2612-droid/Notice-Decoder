@@ -31,6 +31,7 @@ export const PublicLanding: React.FC<PublicLandingProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [keepMeSignedIn, setKeepMeSignedIn] = useState(true);
+  const [registeredRole, setRegisteredRole] = useState<'student' | 'professor'>('student');
 
   // Status
   const [errorMessage, setErrorMessage] = useState('');
@@ -71,7 +72,7 @@ export const PublicLanding: React.FC<PublicLandingProps> = ({
           setIsSubmitting(false);
           return;
         }
-        const res = await register(name, email, password, keepMeSignedIn);
+        const res = await register(name, email, password, keepMeSignedIn, registeredRole);
         if (!res.success) {
           setErrorMessage(res.error || 'Failed to create account.');
         } else {
@@ -360,18 +361,52 @@ export const PublicLanding: React.FC<PublicLandingProps> = ({
             </div>
 
             {/* Quick Demo Credentials Autofill Banner */}
-            <div className="mb-6 p-3 rounded-lg bg-[#F7F4E9] border border-[#E2DDD0] flex items-center justify-between text-xs font-mono">
-              <div>
-                <span className="text-[#172B4D]/60 block text-[10px]">DEMO EVALUATION ACCOUNT</span>
-                <span className="font-medium text-[#172B4D]">student@campus.edu</span>
+            <div className="mb-6 p-3 rounded-xl bg-[#F7F4E9] border border-[#E2DDD0] text-xs font-mono space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[#172B4D]/60 text-[10px] uppercase font-bold tracking-wider">
+                  Demo Evaluation Accounts
+                </span>
+                <span className="text-[10px] text-[#D9A928] bg-[#172B4D] px-2 py-0.5 rounded-full font-mono font-medium">
+                  1-Click Instant Fill
+                </span>
               </div>
-              <button
-                type="button"
-                onClick={() => handleQuickFill('student@campus.edu', 'campus2026')}
-                className="px-2.5 py-1 rounded bg-[#172B4D] text-[#D9A928] hover:bg-[#244270] transition-colors text-[11px] font-medium cursor-pointer"
-              >
-                1-Click Autofill
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <div className="p-2.5 rounded-lg bg-[#FFFDF7] border border-[#E2DDD0] flex flex-col justify-between gap-1.5 shadow-2xs">
+                  <div>
+                    <span className="text-[10px] text-[#172B4D]/60 block font-semibold uppercase tracking-wider">
+                      Student Demo
+                    </span>
+                    <span className="font-mono text-xs text-[#172B4D] font-medium block truncate">
+                      student@campus.edu
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickFill('student@campus.edu', 'campus2026')}
+                    className="w-full py-1.5 rounded bg-[#172B4D] text-[#FFFDF7] hover:bg-[#244270] transition-colors text-[11px] font-medium cursor-pointer text-center"
+                  >
+                    Autofill Student
+                  </button>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-[#FFFDF7] border border-[#D9A928]/60 flex flex-col justify-between gap-1.5 shadow-2xs">
+                  <div>
+                    <span className="text-[10px] text-[#D9A928] block font-bold uppercase tracking-wider">
+                      Professor Demo
+                    </span>
+                    <span className="font-mono text-xs text-[#172B4D] font-medium block truncate">
+                      professor@campus.edu
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickFill('professor@campus.edu', 'prof2026')}
+                    className="w-full py-1.5 rounded bg-[#D9A928] text-[#172B4D] hover:bg-[#B88C1A] transition-colors text-[11px] font-bold cursor-pointer text-center"
+                  >
+                    Autofill Professor
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Error Message */}
@@ -392,19 +427,51 @@ export const PublicLanding: React.FC<PublicLandingProps> = ({
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {authMode === 'register' && (
-                <div>
-                  <label className="block text-xs font-mono font-medium text-[#172B4D] mb-1">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Kavya Rane"
-                    className="w-full px-3.5 py-2.5 rounded-lg bg-[#F7F4E9]/60 border border-[#E2DDD0] text-sm text-[#172B4D] placeholder-[#172B4D]/40 focus:outline-hidden focus:border-[#172B4D] focus:bg-[#FFFDF7] focus:ring-1 focus:ring-[#172B4D] transition-all font-sans"
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className="block text-xs font-mono font-medium text-[#172B4D] mb-1">
+                      Account Role
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRegisteredRole('student')}
+                        className={`py-2 px-3 rounded-lg text-xs font-mono font-medium border text-center transition-all cursor-pointer ${
+                          registeredRole === 'student'
+                            ? 'bg-[#172B4D] text-[#FFFDF7] border-[#172B4D]'
+                            : 'bg-[#FFFDF7] text-[#172B4D]/70 border-[#E2DDD0] hover:bg-[#F7F4E9]'
+                        }`}
+                      >
+                        Student Account
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRegisteredRole('professor')}
+                        className={`py-2 px-3 rounded-lg text-xs font-mono font-medium border text-center transition-all cursor-pointer ${
+                          registeredRole === 'professor'
+                            ? 'bg-[#D9A928] text-[#172B4D] border-[#D9A928] font-bold'
+                            : 'bg-[#FFFDF7] text-[#172B4D]/70 border-[#E2DDD0] hover:bg-[#F7F4E9]'
+                        }`}
+                      >
+                        Professor / Faculty
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono font-medium text-[#172B4D] mb-1">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={registeredRole === 'professor' ? 'e.g. Dr. Evelyn Reed' : 'e.g. Kavya Rane'}
+                      className="w-full px-3.5 py-2.5 rounded-lg bg-[#F7F4E9]/60 border border-[#E2DDD0] text-sm text-[#172B4D] placeholder-[#172B4D]/40 focus:outline-hidden focus:border-[#172B4D] focus:bg-[#FFFDF7] focus:ring-1 focus:ring-[#172B4D] transition-all font-sans"
+                    />
+                  </div>
+                </>
               )}
 
               <div>

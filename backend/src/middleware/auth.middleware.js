@@ -1,14 +1,14 @@
 /**
  * Authentication & Authorization Middleware
  * Validates Bearer token on all private API endpoints.
- * Ensures each user can only access their own private data.
+ * Enforces role-based permissions (student vs professor).
  */
 function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
-      error: 'Authentication required. Missing or malformed Authorization header. Please sign in to access private academic data.'
+      error: 'Authentication required. Missing or malformed Authorization header. Please sign in to access campus data.'
     });
   }
 
@@ -21,14 +21,25 @@ function requireAuth(req, res, next) {
   }
 
   try {
-    // Parse token format: token_<userId>_<timestamp> or JWT
-    // If it's the app's secure session token:
+    // Parse token format:
+    // 1. token_<userId>_<role>_<timestamp> (4 parts)
+    // 2. token_<userId>_<timestamp> (3 parts, default role 'student')
     if (token.startsWith('token_')) {
       const parts = token.split('_');
-      const userId = parts[1];
-      const timestamp = parseInt(parts[2], 10);
+      let userId = 'user-default';
+      let role = 'student';
+      let timestamp = Date.now();
 
-      // Check token freshness (30 days validity)
+      if (parts.length >= 4) {
+        userId = parts[1];
+        role = parts[2];
+        timestamp = parseInt(parts[3], 10);
+      } else if (parts.length === 3) {
+        userId = parts[1];
+        timestamp = parseInt(parts[2], 10);
+      }
+
+      // 30 days validity
       const maxAgeMs = 1000 * 60 * 60 * 24 * 30;
       if (isNaN(timestamp) || Date.now() - timestamp > maxAgeMs) {
         return res.status(401).json({
@@ -38,6 +49,7 @@ function requireAuth(req, res, next) {
 
       req.user = {
         id: userId,
+        role: role,
         token: token
       };
       return next();
@@ -46,6 +58,7 @@ function requireAuth(req, res, next) {
     // For other token formats (e.g. Supabase JWT)
     req.user = {
       id: 'authenticated-user',
+      role: 'student',
       token: token
     };
     return next();
@@ -56,6 +69,29 @@ function requireAuth(req, res, next) {
   }
 }
 
+/**
+ * Role-Based Access Control Middleware
+ * Requires the authenticated user to possess one of the specified roles.
+ */
+function requireRole(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        error: 'Authentication required.'
+      });
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        error: `Access Denied: Requires role in [${allowedRoles.join(', ')}]. Current role is '${req.user.role}'.`
+      });
+    }
+
+    next();
+  };
+}
+
 module.exports = {
-  requireAuth
+  requireAuth,
+  requireRole
 };

@@ -37,7 +37,7 @@ function AppContent() {
   useEffect(() => {
     if (isLoading) return;
 
-    const privateRoutes = ['calendar', 'notices', 'deadlines', 'timetable', 'dashboard', 'workspace'];
+    const privateRoutes = ['calendar', 'notices', 'deadlines', 'timetable', 'dashboard', 'workspace', 'feed', 'professor'];
     const isPrivate = privateRoutes.includes(currentRoute);
 
     if (!isAuthenticated && isPrivate) {
@@ -83,9 +83,10 @@ function AppContent() {
   }
 
   // 2. Authenticated users: full access to protected academic workspace
-  const tab = ['calendar', 'notices', 'deadlines'].includes(currentRoute)
-    ? (currentRoute as 'calendar' | 'notices' | 'deadlines')
-    : 'calendar';
+  const validTabs = ['calendar', 'notices', 'deadlines', 'feed', 'professor'];
+  const tab = validTabs.includes(currentRoute)
+    ? (currentRoute as 'calendar' | 'notices' | 'deadlines' | 'feed' | 'professor')
+    : undefined;
 
   return <ProtectedWorkspace initialTab={tab} />;
 }

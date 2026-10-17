@@ -36,7 +36,7 @@ interface AuthContextType {
   intendedDestination: string | null;
   setIntendedDestination: (dest: string | null) => void;
   login: (email: string, password: string, keepMeSignedIn?: boolean) => Promise<{ success: boolean; error?: string; destination?: string | null }>;
-  register: (name: string, email: string, password: string, keepMeSignedIn?: boolean) => Promise<{ success: boolean; error?: string }>;
+  register: (name: string, email: string, password: string, keepMeSignedIn?: boolean, role?: 'student' | 'professor') => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   resetPassword: (email: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   oauthLogin: (provider: 'google' | 'github') => Promise<{ success: boolean; error?: string }>;
@@ -51,7 +51,7 @@ const SESSION_LOCAL_KEY = 'notice_decoder_session_local_v1';
 const SESSION_SESSION_KEY = 'notice_decoder_session_temp_v1';
 const SYNC_QUEUE_PREFIX = 'notice_decoder_sync_queue';
 
-// Seed account for easy testing
+// Seed accounts for easy testing
 const SEED_USERS: StoredUserRecord[] = [
   {
     id: 'user-default-1',
@@ -70,6 +70,16 @@ const SEED_USERS: StoredUserRecord[] = [
     institution: 'Engineering Faculty',
     role: 'student',
     passwordHash: 'campus2026',
+    createdAt: new Date().toISOString(),
+    authProvider: 'email'
+  },
+  {
+    id: 'user-default-prof',
+    name: 'Dr. Evelyn Reed',
+    email: 'professor@campus.edu',
+    institution: 'Department of Computer Science & Engineering',
+    role: 'professor',
+    passwordHash: 'prof2026',
     createdAt: new Date().toISOString(),
     authProvider: 'email'
   }
@@ -127,10 +137,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initialize and check existing session on mount
   useEffect(() => {
-    // Ensure initial registry has seed users if empty
+    // Ensure initial registry has seed users and merges newly added seed accounts
     const rawUsers = localStorage.getItem(USERS_STORAGE_KEY);
     if (!rawUsers) {
       localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(SEED_USERS));
+    } else {
+      try {
+        const parsed: StoredUserRecord[] = JSON.parse(rawUsers);
+        let updated = false;
+        for (const seed of SEED_USERS) {
+          if (!parsed.some(u => u.email.toLowerCase() === seed.email.toLowerCase())) {
+            parsed.push(seed);
+            updated = true;
+          }
+        }
+        if (updated) {
+          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsed));
+        }
+      } catch {
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(SEED_USERS));
+      }
     }
 
     // Check persistent session in localStorage first, then sessionStorage
@@ -182,7 +208,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       : Date.now() + 1000 * 60 * 60 * 8; // 8 hours
 
     const session: AuthSession = {
-      token: `token_${authenticatedUser.id}_${Date.now()}`,
+      token: `token_${authenticatedUser.id}_${authenticatedUser.role || 'student'}_${Date.now()}`,
       user: authenticatedUser,
       keepMeSignedIn,
       expiresAt
@@ -259,7 +285,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name: string,
     email: string,
     password: string,
-    keepMeSignedIn = true
+    keepMeSignedIn = true,
+    role: 'student' | 'professor' = 'student'
   ): Promise<{ success: boolean; error?: string }> => {
     // Critical: Do NOT allow offline registration
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -296,8 +323,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       name: cleanName,
       email: cleanEmail,
-      institution: 'University Academic Member',
-      role: 'student',
+      institution: role === 'professor' ? 'Department Faculty & Research' : 'University Academic Member',
+      role: role,
       passwordHash: cleanPassword,
       createdAt: new Date().toISOString(),
       authProvider: 'email'
@@ -311,7 +338,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       name: newRecord.name,
       email: newRecord.email,
       institution: newRecord.institution,
-      role: 'student',
+      role: role,
       authProvider: newRecord.authProvider
     };
 
