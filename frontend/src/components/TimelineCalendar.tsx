@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Clock, RotateCcw, Check, Trash2, X } from 'lucide-react';
 
 export interface CalendarEvent {
@@ -6,10 +6,12 @@ export interface CalendarEvent {
   title: string;
   startTime: string; // "HH:mm" e.g. "09:30"
   endTime: string;   // "HH:mm" e.g. "10:30"
-  color: 'cyan' | 'blue' | 'forest';
+  color: 'cyan' | 'blue' | 'forest' | 'amber';
+  sourceNoticeTitle?: string;
+  isDeadlineOnly?: boolean;
 }
 
-const INITIAL_EVENTS: CalendarEvent[] = [
+export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [
   {
     id: 'ev-1',
     title: 'Meeting',
@@ -46,19 +48,46 @@ function formatMinutes(m: number): string {
   return `${h}:${mins < 10 ? '0' : ''}${mins}`;
 }
 
-export const TimelineCalendar: React.FC = () => {
-  const [events, setEvents] = useState<CalendarEvent[]>(INITIAL_EVENTS);
+export interface TimelineCalendarProps {
+  events?: CalendarEvent[];
+  onEventsChange?: (events: CalendarEvent[]) => void;
+  title?: string;
+  compact?: boolean;
+}
+
+export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
+  events: propEvents,
+  onEventsChange,
+  title = 'Start time looks free, the meeting is not',
+  compact = false
+}) => {
+  const [internalEvents, setInternalEvents] = useState<CalendarEvent[]>(propEvents || INITIAL_CALENDAR_EVENTS);
+
+  // Sync if propEvents changes
+  useEffect(() => {
+    if (propEvents) {
+      setInternalEvents(propEvents);
+    }
+  }, [propEvents]);
+
+  const events = propEvents || internalEvents;
+
+  const updateEvents = (newEvents: CalendarEvent[]) => {
+    setInternalEvents(newEvents);
+    onEventsChange?.(newEvents);
+  };
+
   const [activeMode, setActiveMode] = useState<'idle' | 'add' | 'reschedule'>('idle');
 
   // Form states for Add Event
   const [newTitle, setNewTitle] = useState<string>('Guest Session');
   const [newStartTime, setNewStartTime] = useState<string>('11:00');
   const [newEndTime, setNewEndTime] = useState<string>('12:00');
-  const [newColor, setNewColor] = useState<'cyan' | 'blue' | 'forest'>('forest');
+  const [newColor, setNewColor] = useState<'cyan' | 'blue' | 'forest' | 'amber'>('forest');
   const [formError, setFormError] = useState<string>('');
 
   // State for Reschedule
-  const [selectedEventId, setSelectedEventId] = useState<string>('ev-1');
+  const [selectedEventId, setSelectedEventId] = useState<string>(events[0]?.id || 'ev-1');
 
   // Dynamic Scale and Coordinates Calculation
   const { scaleStart, totalSpan, ticks, computedEvents, conflict } = useMemo(() => {
@@ -107,6 +136,8 @@ export const TimelineCalendar: React.FC = () => {
       marker2LeftPct: 0,
       overlapLeftPct: 0,
       overlapWidthPct: 0,
+      conflictingTitleA: '',
+      conflictingTitleB: '',
       description: ''
     };
 
@@ -128,6 +159,8 @@ export const TimelineCalendar: React.FC = () => {
             marker2LeftPct: ((overlapStart - scaleStart) / totalSpan) * 100,
             overlapLeftPct: ((overlapStart - scaleStart) / totalSpan) * 100,
             overlapWidthPct: (overlapM / totalSpan) * 100,
+            conflictingTitleA: a.title,
+            conflictingTitleB: b.title,
             description: `${overlapM} min overlap: check the full duration`
           };
           break;
@@ -173,7 +206,8 @@ export const TimelineCalendar: React.FC = () => {
       color: newColor
     };
 
-    setEvents(prev => [...prev, newEv]);
+    const updated = [...events, newEv];
+    updateEvents(updated);
     setSelectedEventId(newEv.id);
     setActiveMode('idle');
   };
@@ -188,17 +222,16 @@ export const TimelineCalendar: React.FC = () => {
     const newStartM = Math.max(480, Math.min(1320, curStartM + minutesDelta));
     const newEndM = newStartM + duration;
 
-    setEvents(prev =>
-      prev.map(e =>
-        e.id === currentSelectedEvent.id
-          ? {
-              ...e,
-              startTime: `${Math.floor(newStartM / 60)}:${(newStartM % 60) < 10 ? '0' : ''}${newStartM % 60}`,
-              endTime: `${Math.floor(newEndM / 60)}:${(newEndM % 60) < 10 ? '0' : ''}${newEndM % 60}`
-            }
-          : e
-      )
+    const updated = events.map(e =>
+      e.id === currentSelectedEvent.id
+        ? {
+            ...e,
+            startTime: `${Math.floor(newStartM / 60)}:${(newStartM % 60) < 10 ? '0' : ''}${newStartM % 60}`,
+            endTime: `${Math.floor(newEndM / 60)}:${(newEndM % 60) < 10 ? '0' : ''}${newEndM % 60}`
+          }
+        : e
     );
+    updateEvents(updated);
   };
 
   const handleUpdateSelectedTimes = (newStart: string, newEnd: string) => {
@@ -206,393 +239,391 @@ export const TimelineCalendar: React.FC = () => {
     const eM = parseTimeToMinutes(newEnd);
     if (eM <= sM) return;
 
-    setEvents(prev =>
-      prev.map(e =>
-        e.id === currentSelectedEvent.id
-          ? { ...e, startTime: newStart, endTime: newEnd }
-          : e
-      )
+    const updated = events.map(e =>
+      e.id === currentSelectedEvent?.id
+        ? { ...e, startTime: newStart, endTime: newEnd }
+        : e
     );
+    updateEvents(updated);
   };
 
   const handleDeleteEvent = (id: string) => {
     if (events.length <= 1) return;
-    setEvents(prev => {
-      const remaining = prev.filter(e => e.id !== id);
-      setSelectedEventId(remaining[0]?.id || '');
-      return remaining;
-    });
+    const remaining = events.filter(e => e.id !== id);
+    updateEvents(remaining);
+    setSelectedEventId(remaining[0]?.id || '');
   };
 
   const handleResetSample = () => {
-    setEvents(INITIAL_EVENTS);
+    updateEvents(INITIAL_CALENDAR_EVENTS);
     setSelectedEventId('ev-1');
     setActiveMode('idle');
     setFormError('');
   };
 
   return (
-    <section id="calendar" className="py-16 md:py-24 px-6 md:px-12 bg-[#FEFDE6] border-t border-[#E8E5BA]">
-      {/* Anchor for conflicts link */}
+    <div className="w-full">
+      {/* Anchor for conflicts navigation */}
       <div id="conflicts" className="relative -top-24" />
 
-      <div className="max-w-3xl mx-auto">
-        {/* Heading matching reference image */}
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-bold text-[#172D50] text-center mb-10 tracking-tight">
-          Start time looks free, the meeting is not
+      {/* Heading matching reference image */}
+      {!compact && (
+        <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl font-black text-black text-center mb-8 uppercase tracking-tight">
+          {title}
         </h2>
+      )}
 
-        {/* Compact Timeline Calendar Container */}
-        <div className="bg-[#FAF8DB]/30 border border-[#E8E5BA] rounded-xl p-6 sm:p-8 shadow-xs">
-          <div className="overflow-x-auto pb-2">
-            <div className="min-w-[540px]">
-              {/* Dynamic Horizontal Time Axis Header */}
-              <div className="relative h-6 text-xs font-mono text-[#172D50]/60 mb-3 select-none">
+      {/* Compact Timeline Calendar Container (Pale cream, thin border matching reference) */}
+      <div className="bg-[#FAF8DB]/30 border-2 border-black rounded-xl p-5 sm:p-7 shadow-neo">
+        <div className="overflow-x-auto pb-2">
+          <div className="min-w-[540px]">
+            {/* Dynamic Horizontal Time Axis Header */}
+            <div className="relative h-6 text-xs font-mono text-black/70 mb-3 select-none font-bold">
+              {ticks.map((tickM, idx) => {
+                const tickLeftPct = ((tickM - scaleStart) / totalSpan) * 100;
+                const isMarkerTick =
+                  conflict.hasConflict &&
+                  (tickM === Math.round(scaleStart + (conflict.marker1LeftPct * totalSpan) / 100) ||
+                    tickM === Math.round(scaleStart + (conflict.marker2LeftPct * totalSpan) / 100));
+
+                return (
+                  <span
+                    key={idx}
+                    className={`absolute -translate-x-1/2 transition-colors duration-200 ${
+                      isMarkerTick ? 'font-black text-[#dc2626]' : ''
+                    }`}
+                    style={{ left: `${tickLeftPct}%` }}
+                  >
+                    {formatMinutes(tickM)}
+                  </span>
+                );
+              })}
+            </div>
+
+            {/* Timeline Track with Overlapping Event Bars */}
+            <div 
+              className="relative bg-[#FEFDE6] rounded-lg border-2 border-black p-4 flex flex-col justify-center gap-3 overflow-hidden transition-all duration-200"
+              style={{ minHeight: `${Math.max(140, computedEvents.length * 52 + 30)}px` }}
+            >
+              {/* Dynamic vertical grid lines at 30-min intervals */}
+              <div className="absolute inset-0 pointer-events-none">
                 {ticks.map((tickM, idx) => {
                   const tickLeftPct = ((tickM - scaleStart) / totalSpan) * 100;
-                  const isMarkerTick =
-                    conflict.hasConflict &&
-                    (tickM === Math.round(scaleStart + (conflict.marker1LeftPct * totalSpan) / 100) ||
-                      tickM === Math.round(scaleStart + (conflict.marker2LeftPct * totalSpan) / 100));
-
                   return (
-                    <span
+                    <div
                       key={idx}
-                      className={`absolute -translate-x-1/2 transition-colors duration-200 ${
-                        isMarkerTick ? 'font-semibold text-[#dc2626]' : ''
-                      }`}
+                      className="absolute top-0 bottom-0 w-[1px] bg-black/10"
                       style={{ left: `${tickLeftPct}%` }}
-                    >
-                      {formatMinutes(tickM)}
-                    </span>
+                    />
                   );
                 })}
               </div>
 
-              {/* Timeline Track with Overlapping Event Bars */}
-              <div 
-                className="relative bg-[#FEFDE6] rounded-lg border border-[#E8E5BA] p-4 flex flex-col justify-center gap-3 overflow-hidden transition-all duration-200"
-                style={{ minHeight: `${Math.max(140, computedEvents.length * 52 + 30)}px` }}
-              >
-                {/* Dynamic vertical grid lines at 30-min intervals */}
-                <div className="absolute inset-0 pointer-events-none">
-                  {ticks.map((tickM, idx) => {
-                    const tickLeftPct = ((tickM - scaleStart) / totalSpan) * 100;
-                    return (
-                      <div
-                        key={idx}
-                        className="absolute top-0 bottom-0 w-[1px] bg-[#E8E5BA]/40"
-                        style={{ left: `${tickLeftPct}%` }}
-                      />
-                    );
-                  })}
-                </div>
+              {/* Red dashed vertical marker 1 (e.g. 9:30) */}
+              {conflict.hasConflict && (
+                <div
+                  className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#dc2626] z-20 pointer-events-none transition-all duration-300"
+                  style={{ left: `${conflict.marker1LeftPct}%` }}
+                  aria-hidden="true"
+                />
+              )}
 
-                {/* Red dashed vertical marker 1 (Meeting start e.g. 9:30) */}
-                {conflict.hasConflict && (
-                  <div
-                    className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#dc2626] z-20 pointer-events-none transition-all duration-300"
-                    style={{ left: `${conflict.marker1LeftPct}%` }}
-                    aria-hidden="true"
-                  />
-                )}
+              {/* Red dashed vertical marker 2 (e.g. 10:00) */}
+              {conflict.hasConflict && (
+                <div
+                  className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#dc2626] z-20 pointer-events-none transition-all duration-300"
+                  style={{ left: `${conflict.marker2LeftPct}%` }}
+                  aria-hidden="true"
+                />
+              )}
 
-                {/* Red dashed vertical marker 2 (Overlap boundary e.g. 10:00) */}
-                {conflict.hasConflict && (
-                  <div
-                    className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#dc2626] z-20 pointer-events-none transition-all duration-300"
-                    style={{ left: `${conflict.marker2LeftPct}%` }}
-                    aria-hidden="true"
-                  />
-                )}
+              {/* Shaded Overlap Region */}
+              {conflict.hasConflict && (
+                <div
+                  className="absolute top-0 bottom-0 bg-[#dc2626]/15 z-10 pointer-events-none transition-all duration-300 border-x border-[#dc2626]/30"
+                  style={{
+                    left: `${conflict.overlapLeftPct}%`,
+                    width: `${conflict.overlapWidthPct}%`
+                  }}
+                  aria-hidden="true"
+                />
+              )}
 
-                {/* Shaded Overlap Region */}
-                {conflict.hasConflict && (
-                  <div
-                    className="absolute top-0 bottom-0 bg-[#dc2626]/10 z-10 pointer-events-none transition-all duration-300"
+              {/* Dynamic Event Bars in Staggered Rows */}
+              {computedEvents.map((ev) => (
+                <div key={ev.id} className="relative w-full h-10 z-15">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedEventId(ev.id);
+                      setActiveMode('reschedule');
+                    }}
+                    title="Click to reschedule"
+                    className={`absolute h-full rounded font-mono text-xs sm:text-sm font-bold flex items-center px-3.5 shadow-neo-sm tracking-tight transition-all duration-300 truncate text-left cursor-pointer border border-black/60 hover:brightness-105 active:scale-[0.99] ${
+                      ev.color === 'cyan'
+                        ? 'bg-[#06b6d4] text-[#0f172a]'
+                        : ev.color === 'blue'
+                        ? 'bg-[#1d4ed8] text-white'
+                        : ev.color === 'amber'
+                        ? 'bg-[#FCE519] text-black font-black'
+                        : 'bg-[#10380B] text-[#FEFDE6]'
+                    } ${selectedEventId === ev.id && activeMode === 'reschedule' ? 'ring-3 ring-black' : ''}`}
                     style={{
-                      left: `${conflict.overlapLeftPct}%`,
-                      width: `${conflict.overlapWidthPct}%`
+                      left: `${ev.leftPct}%`,
+                      width: `${ev.widthPct}%`
                     }}
-                    aria-hidden="true"
-                  />
-                )}
-
-                {/* Dynamic Event Bars in Staggered Rows */}
-                {computedEvents.map((ev) => (
-                  <div key={ev.id} className="relative w-full h-10 z-15">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedEventId(ev.id);
-                        setActiveMode('reschedule');
-                      }}
-                      title="Click to reschedule"
-                      className={`absolute h-full rounded font-mono text-xs sm:text-sm font-semibold flex items-center px-3.5 shadow-2xs tracking-tight transition-all duration-300 truncate text-left cursor-pointer hover:brightness-105 active:scale-[0.99] ${
-                        ev.color === 'cyan'
-                          ? 'bg-[#06b6d4] text-[#0f172a]'
-                          : ev.color === 'blue'
-                          ? 'bg-[#1d4ed8] text-white'
-                          : 'bg-[#10380B] text-[#FEFDE6]'
-                      } ${selectedEventId === ev.id && activeMode === 'reschedule' ? 'ring-2 ring-[#172D50]' : ''}`}
-                      style={{
-                        left: `${ev.leftPct}%`,
-                        width: `${ev.widthPct}%`
-                      }}
-                    >
-                      {ev.label}
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Red Overlap Caption / Conflict Status */}
-              <div className="relative mt-4 flex items-center justify-center text-center">
-                <p className={`text-xs sm:text-sm font-mono font-semibold transition-all ${
-                  conflict.hasConflict ? 'text-[#dc2626]' : 'text-[#10380B]'
-                }`}>
-                  {conflict.hasConflict
-                    ? conflict.description
-                    : '0 min overlap: check the full duration (Clear)'}
-                </p>
-              </div>
-
-              {/* Inline Functional Event Controls (Add Event, Reschedule, Reset) */}
-              <div className="mt-5 pt-3 border-t border-[#E8E5BA]/60 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-[#172D50]">
-                {/* Action Buttons */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => setActiveMode(prev => (prev === 'add' ? 'idle' : 'add'))}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${
-                      activeMode === 'add'
-                        ? 'bg-[#172D50] text-[#FEFDE6] border-[#172D50]'
-                        : 'bg-[#FEFDE6] border-[#E8E5BA] text-[#172D50] hover:bg-[#F2EE98]/40'
-                    }`}
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Event</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveMode(prev => (prev === 'reschedule' ? 'idle' : 'reschedule'))}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${
-                      activeMode === 'reschedule'
-                        ? 'bg-[#172D50] text-[#FEFDE6] border-[#172D50]'
-                        : 'bg-[#FEFDE6] border-[#E8E5BA] text-[#172D50] hover:bg-[#F2EE98]/40'
-                    }`}
-                  >
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Reschedule</span>
-                  </button>
-
-                  {/* Quick Preset Buttons */}
-                  <button
-                    onClick={() => {
-                      setEvents(prev =>
-                        prev.map(e =>
-                          e.color === 'cyan'
-                            ? { ...e, startTime: '09:30', endTime: '10:30' }
-                            : e
-                        )
-                      );
-                    }}
-                    className="px-2 py-1 rounded text-[11px] bg-[#FEFDE6] border border-[#E8E5BA] hover:bg-[#FAF8DB] text-[#172D50]/80"
-                  >
-                    9:30 (Overlap)
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setEvents(prev =>
-                        prev.map(e =>
-                          e.color === 'cyan'
-                            ? { ...e, startTime: '11:00', endTime: '12:00' }
-                            : e
-                        )
-                      );
-                    }}
-                    className="px-2 py-1 rounded text-[11px] bg-[#FEFDE6] border border-[#E8E5BA] hover:bg-[#FAF8DB] text-[#10380B] font-medium"
-                  >
-                    11:00 (Clear)
+                    {ev.label}
                   </button>
                 </div>
+              ))}
+            </div>
 
-                {/* Reset to Original Specimen */}
+            {/* Red Overlap Caption / Conflict Status */}
+            <div className="relative mt-4 flex items-center justify-center text-center">
+              <p className={`text-xs sm:text-sm font-mono font-bold transition-all ${
+                conflict.hasConflict ? 'text-[#dc2626]' : 'text-[#10380B]'
+              }`}>
+                {conflict.hasConflict
+                  ? conflict.description
+                  : '0 min overlap: check the full duration (Clear)'}
+              </p>
+            </div>
+
+            {/* Inline Functional Event Controls (Add Event, Reschedule, Reset) */}
+            <div className="mt-5 pt-3 border-t-2 border-black/20 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-black">
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={handleResetSample}
-                  className="inline-flex items-center gap-1 text-[11px] text-[#172D50]/60 hover:text-[#172D50] hover:underline"
+                  onClick={() => setActiveMode(prev => (prev === 'add' ? 'idle' : 'add'))}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 border-2 border-black font-bold transition-colors ${
+                    activeMode === 'add'
+                      ? 'bg-black text-[#FCE519] shadow-neo-sm'
+                      : 'bg-white text-black hover:bg-[#FCE519] shadow-neo-sm'
+                  }`}
                 >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Reset Sample</span>
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Event</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveMode(prev => (prev === 'reschedule' ? 'idle' : 'reschedule'))}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 border-2 border-black font-bold transition-colors ${
+                    activeMode === 'reschedule'
+                      ? 'bg-black text-[#FCE519] shadow-neo-sm'
+                      : 'bg-white text-black hover:bg-[#FCE519] shadow-neo-sm'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Reschedule</span>
+                </button>
+
+                {/* Quick Preset Buttons */}
+                <button
+                  onClick={() => {
+                    const updated = events.map(e =>
+                      e.color === 'cyan'
+                        ? { ...e, startTime: '09:30', endTime: '10:30' }
+                        : e
+                    );
+                    updateEvents(updated);
+                  }}
+                  className="px-2 py-1 border border-black bg-white hover:bg-[#FAF8F0] text-black font-bold text-[11px]"
+                >
+                  9:30 (Overlap)
+                </button>
+
+                <button
+                  onClick={() => {
+                    const updated = events.map(e =>
+                      e.color === 'cyan'
+                        ? { ...e, startTime: '11:00', endTime: '12:00' }
+                        : e
+                    );
+                    updateEvents(updated);
+                  }}
+                  className="px-2 py-1 border border-black bg-white hover:bg-[#FAF8F0] text-[#10380B] font-bold text-[11px]"
+                >
+                  11:00 (Clear)
                 </button>
               </div>
 
-              {/* Inline Panel: Add Event Form */}
-              {activeMode === 'add' && (
-                <form
-                  onSubmit={handleAddSubmit}
-                  className="mt-4 p-3.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] flex flex-wrap items-center gap-3 text-xs font-mono animate-fade-in"
-                >
-                  <div className="flex-1 min-w-[120px]">
-                    <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Title</span>
-                    <input
-                      type="text"
-                      value={newTitle}
-                      onChange={e => setNewTitle(e.target.value)}
-                      placeholder="Title"
-                      className="w-full px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50]"
-                    />
-                  </div>
+              {/* Reset to Original Specimen */}
+              <button
+                onClick={handleResetSample}
+                className="inline-flex items-center gap-1 text-[11px] text-black/70 hover:text-black font-bold underline"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset Sample</span>
+              </button>
+            </div>
 
-                  <div>
-                    <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Start</span>
-                    <input
-                      type="text"
-                      value={newStartTime}
-                      onChange={e => setNewStartTime(e.target.value)}
-                      placeholder="09:30"
-                      className="w-20 px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50]"
-                    />
-                  </div>
+            {/* Inline Panel: Add Event Form */}
+            {activeMode === 'add' && (
+              <form
+                onSubmit={handleAddSubmit}
+                className="mt-4 p-3.5 bg-white border-2 border-black shadow-neo flex flex-wrap items-center gap-3 text-xs font-mono"
+              >
+                <div className="flex-1 min-w-[120px]">
+                  <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">Title</span>
+                  <input
+                    type="text"
+                    value={newTitle}
+                    onChange={e => setNewTitle(e.target.value)}
+                    placeholder="Title"
+                    className="w-full px-2 py-1 border border-black bg-white text-black"
+                  />
+                </div>
 
-                  <div>
-                    <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">End</span>
-                    <input
-                      type="text"
-                      value={newEndTime}
-                      onChange={e => setNewEndTime(e.target.value)}
-                      placeholder="10:30"
-                      className="w-20 px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50]"
-                    />
-                  </div>
+                <div>
+                  <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">Start</span>
+                  <input
+                    type="text"
+                    value={newStartTime}
+                    onChange={e => setNewStartTime(e.target.value)}
+                    placeholder="09:30"
+                    className="w-20 px-2 py-1 border border-black bg-white text-black"
+                  />
+                </div>
 
+                <div>
+                  <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">End</span>
+                  <input
+                    type="text"
+                    value={newEndTime}
+                    onChange={e => setNewEndTime(e.target.value)}
+                    placeholder="10:30"
+                    className="w-20 px-2 py-1 border border-black bg-white text-black"
+                  />
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">Color</span>
+                  <select
+                    value={newColor}
+                    onChange={e => setNewColor(e.target.value as 'cyan' | 'blue' | 'forest' | 'amber')}
+                    className="px-2 py-1 border border-black bg-white text-black font-bold"
+                  >
+                    <option value="forest">Forest</option>
+                    <option value="cyan">Cyan</option>
+                    <option value="blue">Blue</option>
+                    <option value="amber">Acid Yellow</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 pt-4">
+                  <button
+                    type="submit"
+                    className="px-3 py-1 bg-black text-[#FCE519] font-bold border border-black hover:bg-black/90 cursor-pointer"
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMode('idle')}
+                    className="p-1 text-black/60 hover:text-black cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {formError && (
+                  <div className="w-full text-[#dc2626] text-[11px] font-bold">{formError}</div>
+                )}
+              </form>
+            )}
+
+            {/* Inline Panel: Reschedule Controls */}
+            {activeMode === 'reschedule' && currentSelectedEvent && (
+              <div className="mt-4 p-3.5 bg-white border-2 border-black shadow-neo flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Event Selector */}
                   <div>
-                    <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Color</span>
+                    <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">Target Event</span>
                     <select
-                      value={newColor}
-                      onChange={e => setNewColor(e.target.value as 'cyan' | 'blue' | 'forest')}
-                      className="px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50]"
+                      value={selectedEventId}
+                      onChange={e => setSelectedEventId(e.target.value)}
+                      className="px-2 py-1 border border-black bg-white text-black font-bold"
                     >
-                      <option value="forest">Forest</option>
-                      <option value="cyan">Cyan</option>
-                      <option value="blue">Blue</option>
+                      {events.map(ev => (
+                        <option key={ev.id} value={ev.id}>
+                          {ev.title} ({ev.startTime}–{ev.endTime})
+                        </option>
+                      ))}
                     </select>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-4">
-                    <button
-                      type="submit"
-                      className="px-3 py-1 rounded bg-[#10380B] text-[#FEFDE6] font-medium hover:bg-[#1A5413]"
-                    >
-                      Add
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveMode('idle')}
-                      className="p-1 rounded text-[#172D50]/60 hover:text-[#172D50]"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {formError && (
-                    <div className="w-full text-[#dc2626] text-[11px]">{formError}</div>
-                  )}
-                </form>
-              )}
-
-              {/* Inline Panel: Reschedule Controls */}
-              {activeMode === 'reschedule' && currentSelectedEvent && (
-                <div className="mt-4 p-3.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] flex flex-wrap items-center justify-between gap-3 text-xs font-mono animate-fade-in">
-                  <div className="flex flex-wrap items-center gap-3">
-                    {/* Event Selector */}
-                    <div>
-                      <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Target Event</span>
-                      <select
-                        value={selectedEventId}
-                        onChange={e => setSelectedEventId(e.target.value)}
-                        className="px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50] font-semibold"
-                      >
-                        {events.map(ev => (
-                          <option key={ev.id} value={ev.id}>
-                            {ev.title} ({ev.startTime}–{ev.endTime})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Step Shift Buttons */}
-                    <div>
-                      <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Quick Shift</span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleTimeShift(-15)}
-                          className="px-2 py-1 rounded bg-[#FAF8DB] border border-[#E8E5BA] hover:bg-[#F2EE98]/40"
-                        >
-                          -15m
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleTimeShift(15)}
-                          className="px-2 py-1 rounded bg-[#FAF8DB] border border-[#E8E5BA] hover:bg-[#F2EE98]/40"
-                        >
-                          +15m
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Manual time adjust */}
-                    <div>
-                      <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Times</span>
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="text"
-                          value={currentSelectedEvent.startTime}
-                          onChange={e =>
-                            handleUpdateSelectedTimes(e.target.value, currentSelectedEvent.endTime)
-                          }
-                          className="w-16 px-1.5 py-1 rounded border border-[#E8E5BA] bg-white text-center"
-                        />
-                        <span>–</span>
-                        <input
-                          type="text"
-                          value={currentSelectedEvent.endTime}
-                          onChange={e =>
-                            handleUpdateSelectedTimes(currentSelectedEvent.startTime, e.target.value)
-                          }
-                          className="w-16 px-1.5 py-1 rounded border border-[#E8E5BA] bg-white text-center"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-2 sm:pt-0">
-                    {events.length > 1 && (
+                  {/* Step Shift Buttons */}
+                  <div>
+                    <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">Quick Shift</span>
+                    <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => handleDeleteEvent(currentSelectedEvent.id)}
-                        className="p-1.5 rounded text-[#dc2626] hover:bg-[#FFF3E0]"
-                        title="Remove event"
+                        onClick={() => handleTimeShift(-15)}
+                        className="px-2 py-1 border border-black bg-[#FEFDE6] hover:bg-[#FCE519] font-bold"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        -15m
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setActiveMode('idle')}
-                      className="px-3 py-1 rounded bg-[#172D50] text-[#FEFDE6] inline-flex items-center gap-1"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Done</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTimeShift(15)}
+                        className="px-2 py-1 border border-black bg-[#FEFDE6] hover:bg-[#FCE519] font-bold"
+                      >
+                        +15m
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Manual time adjust */}
+                  <div>
+                    <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">Times</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={currentSelectedEvent.startTime}
+                        onChange={e =>
+                          handleUpdateSelectedTimes(e.target.value, currentSelectedEvent.endTime)
+                        }
+                        className="w-16 px-1.5 py-1 border border-black bg-white text-center font-bold"
+                      />
+                      <span>–</span>
+                      <input
+                        type="text"
+                        value={currentSelectedEvent.endTime}
+                        onChange={e =>
+                          handleUpdateSelectedTimes(currentSelectedEvent.startTime, e.target.value)
+                        }
+                        className="w-16 px-1.5 py-1 border border-black bg-white text-center font-bold"
+                      />
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
+
+                <div className="flex items-center gap-2 pt-2 sm:pt-0">
+                  {events.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteEvent(currentSelectedEvent.id)}
+                      className="p-1.5 border border-[#dc2626] text-[#dc2626] hover:bg-[#FFF0F0]"
+                      title="Remove event"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setActiveMode('idle')}
+                    className="px-3 py-1 bg-black text-[#FEFDE6] inline-flex items-center gap-1 font-bold"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Done</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 };
