@@ -370,7 +370,15 @@ export const StudentNoticeFeed: React.FC<StudentNoticeFeedProps> = ({
               {selectedNoticeForDetail.requiredAction && (
                 <div className="p-3.5 rounded-xl bg-[#FFF8E6] border border-[#EED17D] text-xs font-mono text-[#172B4D]">
                   <span className="font-bold block mb-1">Required Student Action:</span>
-                  <span>{selectedNoticeForDetail.requiredAction}</span>
+                  {selectedNoticeForDetail.requiredAction.includes(';') ? (
+                    <div className="space-y-1">
+                      {selectedNoticeForDetail.requiredAction.split(/;\s*/).map((act, idx) => (
+                        <div key={idx}>• {act}</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span>{selectedNoticeForDetail.requiredAction}</span>
+                  )}
                 </div>
               )}
             </div>

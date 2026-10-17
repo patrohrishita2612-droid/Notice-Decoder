@@ -22,6 +22,9 @@ export interface ExtractedNotice {
   fileSize?: number;
   issuingDepartment?: string | null;
   isoDate?: string | null;
+  requiredActions?: string[];
+  documentsRequired?: string[];
+  evidence?: string[];
 }
 
 export interface OfficialNotice {

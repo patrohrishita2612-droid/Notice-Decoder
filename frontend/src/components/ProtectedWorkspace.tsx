@@ -238,6 +238,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
   const [errorToast, setErrorToast] = useState('');
   const [backendDecodedData, setBackendDecodedData] = useState<any>(null);
   const [backendDecodedError, setBackendDecodedError] = useState('');
+  const decodePromiseRef = useRef<Promise<{ ok: boolean; data?: any; error?: string } | null> | null>(null);
   const [isPreviewingAnimation, setIsPreviewingAnimation] = useState(false);
   const [previewParticleMode, setPreviewParticleMode] = useState<'document' | 'scanning' | 'clustering' | 'constellation' | 'settling'>('scanning');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -309,7 +310,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
 
     // Concurrently query backend AI decode API if online
     if (isOnline && trimmed) {
-      fetch('http://localhost:5000/api/notices/decode', {
+      const fetchPromise = fetch('http://localhost:5000/api/notices/decode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: trimmed })
@@ -318,23 +319,47 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
           const json = await res.json().catch(() => null);
           if (res.ok && json?.data) {
             setBackendDecodedData(json.data);
-          } else if (!res.ok && json?.error) {
-            setBackendDecodedError(json.error);
+            return { ok: true, data: json.data };
+          } else {
+            const err = json?.error || json?.message || 'Notice decoding failed.';
+            setBackendDecodedError(err);
+            return { ok: false, error: err };
           }
         })
         .catch(() => {
-          // Backend offline or unreachable
+          return { ok: false, error: '' };
         });
+      decodePromiseRef.current = fetchPromise;
+    } else {
+      decodePromiseRef.current = null;
     }
   };
 
   // Called when NoticeProcessingSteps finishes its moving line animation
-  const handleProcessingComplete = () => {
-    if (backendDecodedError) {
+  const handleProcessingComplete = async () => {
+    let resolvedData = backendDecodedData;
+    let resolvedError = backendDecodedError;
+
+    // If backend fetch was triggered and is still pending, await it to prevent race conditions
+    if (!resolvedData && !resolvedError && decodePromiseRef.current) {
+      try {
+        const result = await decodePromiseRef.current;
+        if (result?.ok && result?.data) {
+          resolvedData = result.data;
+        } else if (result?.error) {
+          resolvedError = result.error;
+        }
+      } catch {
+        // Fallback to offline mode safely
+      }
+    }
+
+    if (resolvedError) {
       setIsDecoding(false);
-      setErrorToast(backendDecodedError);
+      setErrorToast(resolvedError);
       setExtractedDraft(null);
       setBackendDecodedError('');
+      decodePromiseRef.current = null;
       return;
     }
 
@@ -346,6 +371,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       setIsDecoding(false);
       setErrorToast('Not enough information to extract a notice. Please upload a valid notice or enter more details.');
       setExtractedDraft(null);
+      decodePromiseRef.current = null;
       return;
     }
 
@@ -360,39 +386,123 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     let urgency: 'high' | 'medium' | 'normal' | 'unknown' = 'normal';
     let isoDate: string | null = null;
     let humanDate: string | null = null;
+    let audience: string | null = null;
+    let requiredActionsList: string[] = [];
+    let documentsRequiredList: string[] = [];
+    let evidenceList: string[] = [];
     const flags: { field: string; reason: string; suggestion: string }[] = [];
 
     // If backend AI returned decoded data, prioritize it
-    if (backendDecodedData) {
-      const data = backendDecodedData;
+    if (resolvedData) {
+      const data = resolvedData;
       title = data.title || null;
       summary = data.summary || '';
-      if (data.event_date) {
-        humanDate = data.event_date;
-        const parsed = new Date(data.event_date);
-        if (!isNaN(parsed.getTime())) {
-          isoDate = parsed.toISOString().split('T')[0];
+
+      // Format event_date and local isoDate without UTC timezone shifts
+      const rawDate = data.event_date || data.date || null;
+      if (rawDate) {
+        humanDate = String(rawDate).trim();
+        const isoMatch = humanDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (isoMatch) {
+          isoDate = humanDate;
         } else {
-          isoDate = data.event_date;
+          const parsed = new Date(humanDate.replace(/(st|nd|rd|th)/i, ''));
+          if (!isNaN(parsed.getTime())) {
+            const y = parsed.getFullYear();
+            const m = String(parsed.getMonth() + 1).padStart(2, '0');
+            const d = String(parsed.getDate()).padStart(2, '0');
+            isoDate = `${y}-${m}-${d}`;
+          } else {
+            isoDate = humanDate;
+          }
         }
       }
+
+      // Preserve start_time and end_time with AM/PM designations
       startTime = data.start_time || null;
       endTime = data.end_time || null;
-      venue = data.venue || null;
-      deadline = data.deadline || null;
-      if (data.required_actions && data.required_actions.length > 0) {
-        deadlineAction = data.required_actions[0];
+      if (!startTime && data.time) {
+        const timeStr = String(data.time).trim();
+        const rangeMatch = timeStr.match(/^(.*?)\s*(?:–|-|to)\s*(.*?)$/i);
+        if (rangeMatch) {
+          startTime = rangeMatch[1].trim();
+          endTime = rangeMatch[2].trim();
+        } else {
+          startTime = timeStr;
+        }
       }
+
+      // Preserve legitimate venue (null if absent, especially for virtual events)
+      venue = data.venue ? String(data.venue).trim() : null;
+
+      // Extract actions as array and prefer structured required_actions over singular required_action
+      if (Array.isArray(data.required_actions) && data.required_actions.length > 0) {
+        requiredActionsList = data.required_actions.map((a: any) => String(a).trim()).filter(Boolean);
+      } else if (Array.isArray(data.requiredActions) && data.requiredActions.length > 0) {
+        requiredActionsList = data.requiredActions.map((a: any) => String(a).trim()).filter(Boolean);
+      } else if (typeof data.required_action === 'string' && data.required_action.trim()) {
+        requiredActionsList = data.required_action.split(/;\s*/).map((s: string) => s.trim()).filter(Boolean);
+      } else if (typeof data.requiredAction === 'string' && data.requiredAction.trim()) {
+        requiredActionsList = data.requiredAction.split(/;\s*/).map((s: string) => s.trim()).filter(Boolean);
+      }
+
+      // Map deadline to existing deadline field
+      deadline = data.deadline ? String(data.deadline).trim() : null;
+      deadlineAction = requiredActionsList.length > 0
+        ? requiredActionsList.join('; ')
+        : (typeof data.required_action === 'string' ? data.required_action : null);
+
+      // Target audience
+      audience = data.target_audience || data.targetAudience || data.audience || 'All Students';
+
+      // Urgency mapping: 'low' | 'medium' | 'high' | 'unknown'
       if (data.urgency === 'high') urgency = 'high';
       else if (data.urgency === 'medium') urgency = 'medium';
-      else if (data.urgency === 'low') urgency = 'normal';
+      else if (data.urgency === 'low' || data.urgency === 'normal') urgency = 'normal';
       else urgency = 'unknown';
 
-      if (data.missing_information && Array.isArray(data.missing_information)) {
+      // Category derivation
+      const combined = `${data.title || ''} ${data.summary || ''} ${noticeText}`.toLowerCase();
+      if (combined.includes('exam') || combined.includes('test') || combined.includes('viva') || combined.includes('quiz')) {
+        category = 'Examination';
+      } else if (combined.includes('lecture') || combined.includes('talk') || combined.includes('seminar') || combined.includes('workshop') || combined.includes('webinar')) {
+        category = 'Guest Lecture';
+      } else if (combined.includes('holiday') || combined.includes('admin') || combined.includes('fee')) {
+        category = 'Administrative';
+      } else {
+        category = 'Academic';
+      }
+
+      // Documents required & evidence
+      if (Array.isArray(data.documents_required)) {
+        documentsRequiredList = data.documents_required.map((d: any) => String(d).trim()).filter(Boolean);
+      }
+      if (Array.isArray(data.evidence)) {
+        evidenceList = data.evidence.map((e: any) => String(e).trim()).filter(Boolean);
+      }
+
+      // Map missing_information strictly from data.missing_information without injecting synthetic venue flags
+      if (Array.isArray(data.missing_information)) {
         data.missing_information.forEach((info: string) => {
+          const text = String(info).trim();
+          if (!text) return;
+
+          // Do not mark registration actions as missing when required_actions contains valid actions
+          if (requiredActionsList.length > 0 && /registration\s*(action|step|task)/i.test(text)) {
+            return;
+          }
+
+          let field = 'Ambiguity / Missing Detail';
+          if (/venue|location|room|hall/i.test(text)) field = 'Venue';
+          else if (/date|schedule/i.test(text)) field = 'Event Date';
+          else if (/time|timing|duration/i.test(text)) field = 'Event Time';
+          else if (/register|registration|link/i.test(text)) field = 'Registration';
+          else if (/eligibility|department|branch|audience/i.test(text)) field = 'Audience / Eligibility';
+          else if (/document/i.test(text)) field = 'Required Documents';
+
           flags.push({
-            field: 'Ambiguity / Missing Detail',
-            reason: info,
+            field,
+            reason: text,
             suggestion: 'Verify with department coordinator'
           });
         });
@@ -411,7 +521,10 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
         humanDate = dateMatch[0];
         const parsed = new Date(dateMatch[0].replace(/(st|nd|rd|th)/i, ''));
         if (!isNaN(parsed.getTime())) {
-          isoDate = parsed.toISOString().split('T')[0];
+          const y = parsed.getFullYear();
+          const m = String(parsed.getMonth() + 1).padStart(2, '0');
+          const d = String(parsed.getDate()).padStart(2, '0');
+          isoDate = `${y}-${m}-${d}`;
         }
       }
 
@@ -438,6 +551,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       if (deadlineMatch) {
         deadline = deadlineMatch[1].trim();
         deadlineAction = 'Review submission requirement';
+        requiredActionsList = [deadlineAction];
       }
 
       const lower = noticeText.toLowerCase();
@@ -445,6 +559,31 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       else if (lower.includes('lecture') || lower.includes('talk') || lower.includes('seminar')) category = 'Guest Lecture';
       else if (lower.includes('holiday') || lower.includes('admin')) category = 'Administrative';
       else category = 'Academic';
+
+      audience = 'All Students';
+
+      // Flag missing fields only in offline heuristic mode
+      if (!humanDate) {
+        flags.push({
+          field: 'Event Date',
+          reason: 'No event date specified in notice text.',
+          suggestion: 'Event cannot be scheduled to calendar without a confirmed date.'
+        });
+      }
+      if (!startTime) {
+        flags.push({
+          field: 'Event Time',
+          reason: 'No specific time duration or start time mentioned.',
+          suggestion: 'Check department notice board for time allocation.'
+        });
+      }
+      if (!venue) {
+        flags.push({
+          field: 'Venue',
+          reason: 'No venue or room number specified in notice.',
+          suggestion: 'Verify hall allocation prior to event.'
+        });
+      }
     }
 
     // If text genuinely lacks identifiable notice information
@@ -452,30 +591,8 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       setIsDecoding(false);
       setErrorToast('Not enough information to extract a notice. Please upload a valid notice or enter more details.');
       setExtractedDraft(null);
+      decodePromiseRef.current = null;
       return;
-    }
-
-    // Flag missing fields
-    if (!humanDate) {
-      flags.push({
-        field: 'Event Date',
-        reason: 'No event date specified in notice text.',
-        suggestion: 'Event cannot be scheduled to calendar without a confirmed date.'
-      });
-    }
-    if (!startTime) {
-      flags.push({
-        field: 'Event Time',
-        reason: 'No specific time duration or start time mentioned.',
-        suggestion: 'Check department notice board for time allocation.'
-      });
-    }
-    if (!venue) {
-      flags.push({
-        field: 'Venue',
-        reason: 'No venue or room number specified in notice.',
-        suggestion: 'Verify hall allocation prior to event.'
-      });
     }
 
     const draft: ExtractedNotice & { isoDate: string | null } = {
@@ -490,33 +607,41 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       deadline,
       deadlineAction,
       summary,
-      audience: 'All Students',
+      audience: audience || 'All Students',
       category,
       urgency,
       fileName: uploadedFile?.name,
       fileType: uploadedFile?.type,
       fileSize: uploadedFile?.size,
-      uncertainFlags: flags
+      uncertainFlags: flags,
+      requiredActions: requiredActionsList,
+      documentsRequired: documentsRequiredList,
+      evidence: evidenceList
     };
 
     setExtractedDraft(draft);
     setIsDecoding(false);
+    decodePromiseRef.current = null;
     setSuccessToast('Notice decoded into structured academic schema.');
     setTimeout(() => setSuccessToast(''), 3500);
 
-    // If a genuine deadline is detected, add to personal deadlines
-    if (deadline && deadlineAction && deadline !== 'Not specified') {
-      const newDl: PersonalDeadline = {
-        id: `dl-${Date.now()}`,
-        title: `${title || 'Notice'} Action Requirement`,
-        dueDate: humanDate || 'Not specified',
-        dueTime: deadline,
-        action: deadlineAction,
+    // Populate personal deadlines for all individual actions in requiredActionsList
+    const actionsToSchedule = requiredActionsList.length > 0 
+      ? requiredActionsList 
+      : (deadlineAction ? [deadlineAction] : (deadline && deadline !== 'Not specified' ? ['Review notice requirement'] : []));
+
+    if (actionsToSchedule.length > 0) {
+      const newItems: PersonalDeadline[] = actionsToSchedule.map((actItem, idx) => ({
+        id: `dl-${Date.now()}-${idx}`,
+        title: `${title || 'Notice'} Action Requirement${actionsToSchedule.length > 1 ? ` (${idx + 1}/${actionsToSchedule.length})` : ''}`,
+        dueDate: deadline || humanDate || 'Not specified',
+        dueTime: deadline || 'Action Required',
+        action: actItem,
         completed: false,
         priority: urgency === 'high' ? 'high' : 'normal',
         sourceNotice: title || 'Campus Notice'
-      };
-      const updatedDl = [newDl, ...deadlines];
+      }));
+      const updatedDl = [...newItems, ...deadlines];
       setDeadlines(updatedDl);
       try {
         localStorage.setItem(deadlinesStorageKey, JSON.stringify(updatedDl));
@@ -1267,9 +1392,34 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                       </div>
                       <div>
                         <span className="text-[10px] text-[#172B4D]/60 block uppercase font-semibold">Student Action</span>
-                        <span className={`font-semibold truncate block ${extractedDraft.deadline ? 'text-[#172B4D]' : 'text-[#172B4D]/50 italic'}`}>
-                          {extractedDraft.deadline || 'Not specified'}
-                        </span>
+                        {extractedDraft.requiredActions && extractedDraft.requiredActions.length > 0 ? (
+                          extractedDraft.requiredActions.length === 1 ? (
+                            <span className="font-semibold block text-[#172B4D] leading-snug" title={extractedDraft.requiredActions[0]}>
+                              {extractedDraft.requiredActions[0]}
+                            </span>
+                          ) : (
+                            <div className="space-y-1 font-semibold text-[#172B4D]">
+                              {extractedDraft.requiredActions.map((action, idx) => (
+                                <div key={idx} className="text-xs leading-snug" title={action}>
+                                  • {action}
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        ) : extractedDraft.deadlineAction ? (
+                          <span className="font-semibold block text-[#172B4D] leading-snug" title={extractedDraft.deadlineAction}>
+                            {extractedDraft.deadlineAction}
+                          </span>
+                        ) : (
+                          <span className="font-semibold text-[#172B4D]/50 italic block">
+                            Not specified
+                          </span>
+                        )}
+                        {extractedDraft.deadline && (
+                          <span className="text-[10px] text-[#172B4D]/60 block mt-1">
+                            Deadline: {extractedDraft.deadline}
+                          </span>
+                        )}
                       </div>
                     </div>
 
