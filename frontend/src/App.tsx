@@ -83,8 +83,8 @@ function AppContent() {
   }
 
   // 2. Authenticated users: full access to protected academic workspace
-  const tab = ['calendar', 'notices', 'deadlines', 'timetable'].includes(currentRoute)
-    ? (currentRoute as 'calendar' | 'notices' | 'deadlines' | 'timetable')
+  const tab = ['calendar', 'notices', 'deadlines'].includes(currentRoute)
+    ? (currentRoute as 'calendar' | 'notices' | 'deadlines')
     : 'calendar';
 
   return <ProtectedWorkspace initialTab={tab} />;

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { TimelineCalendar, CalendarEvent, INITIAL_CALENDAR_EVENTS } from './TimelineCalendar';
+import { PersonalAcademicCalendar, CalendarEvent, INITIAL_ACADEMIC_EVENTS } from './PersonalAcademicCalendar';
 import { NoticeProcessingSteps } from './NoticeProcessingSteps';
 import { 
-  Sparkles, LogOut, FileText, Calendar, 
+  Sparkles, LogOut, FileText, Calendar as CalendarIcon, 
   AlertTriangle, CheckCircle2, Download, Clock, MapPin, 
-  Wifi, WifiOff, RefreshCw, CheckSquare, BookOpen
+  Wifi, WifiOff, RefreshCw, CheckSquare
 } from 'lucide-react';
 import { downloadNoticeIcs } from '../utils/icsExport';
 import { ExtractedNotice } from '../types';
@@ -57,20 +57,23 @@ const INITIAL_DEADLINES: PersonalDeadline[] = [
 const TEMPLATE_NOTICES = [
   {
     name: 'Internal Test 2 (10:00 AM)',
-    text: `DEPARTMENT OF COMPUTER ENGINEERING\nCIRCULAR NO: CE/2026/NOV-14\n\nSubject: Conduct of Internal Assessment Test 2 (Offline Mode)\n\nAll third-year students (Batch 2024-2028) are hereby informed that Internal Test 2 for CSA (CS-302) is scheduled on 13 November 2026 from 10:00 AM to 11:30 AM in Examination Hall Room 204.\n\nStudents must submit their certified practical record books to the department office no later than 12:00 noon on the same day. Late submissions will result in forfeiture of internal marks.\n\nNote: Seating for Roll Nos 45–60 is tentatively shifted to Room 206 pending electrical clearance. Carry approved non-programmable calculators.`
+    date: '2026-11-18',
+    text: `DEPARTMENT OF COMPUTER ENGINEERING\nCIRCULAR NO: CE/2026/NOV-14\n\nSubject: Conduct of Internal Assessment Test 2 (Offline Mode)\n\nAll third-year students (Batch 2024-2028) are hereby informed that Internal Test 2 for CSA (CS-302) is scheduled on 18 November 2026 from 10:00 AM to 11:30 AM in Examination Hall Room 204.\n\nStudents must submit their certified practical record books to the department office no later than 12:00 noon on the same day. Late submissions will result in forfeiture of internal marks.\n\nNote: Seating for Roll Nos 45–60 is tentatively shifted to Room 206 pending electrical clearance. Carry approved non-programmable calculators.`
   },
   {
-    name: 'Guest Lecture (09:30 AM - Overlaps Lecture)',
-    text: `TECH-INNOVATE SERIES 2026\nDate: 14 November 2026\nSpeaker: Dr. A. Ramanujan (Senior Systems Architect, Google Cloud)\nTime: 09:30 AM to 10:30 AM\nVenue: Seminar Hall B (Block 1)\nAttendance is compulsory for CSE & IT students. Topic: Scalable Cloud Microservices. Q&A session follows.`
+    name: 'Guest Lecture (09:30 AM - Overlaps Meeting)',
+    date: '2026-11-13',
+    text: `TECH-INNOVATE SERIES 2026\nDate: 13 November 2026\nSpeaker: Dr. A. Ramanujan (Senior Systems Architect, Google Cloud)\nTime: 09:30 AM to 10:30 AM\nVenue: Seminar Hall B (Block 1)\nAttendance is compulsory for CSE & IT students. Topic: Scalable Cloud Microservices. Q&A session follows.`
   },
   {
     name: 'Project Phase 1 Review (11:30 AM - Clear)',
-    text: `CAPSTONE PROJECT COMMITTEE\nNotice Ref: CPC/2026/PH1-EVAL\nAll final-year project teams are notified that Project Phase 1 Evaluation is scheduled for Friday from 11:30 AM to 12:30 PM in Project Lab 3. Presentation slides and GitHub repository links must be submitted before 09:00 AM.`
+    date: '2026-11-14',
+    text: `CAPSTONE PROJECT COMMITTEE\nNotice Ref: CPC/2026/PH1-EVAL\nAll final-year project teams are notified that Project Phase 1 Evaluation is scheduled for Friday, 14 November 2026 from 11:30 AM to 12:30 PM in Project Lab 3. Presentation slides and GitHub repository links must be submitted before 09:00 AM.`
   }
 ];
 
 interface ProtectedWorkspaceProps {
-  initialTab?: 'calendar' | 'notices' | 'deadlines' | 'timetable';
+  initialTab?: 'calendar' | 'notices' | 'deadlines';
 }
 
 export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({ 
@@ -81,15 +84,19 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     queueOfflineAction, syncOfflineQueue, getUserStorageKey 
   } = useAuth();
 
-  // Active Workspace Tab
-  const [activeTab, setActiveTab] = useState<'calendar' | 'notices' | 'deadlines' | 'timetable'>(initialTab);
+  // Active Workspace Tab: 'calendar' | 'notices' | 'deadlines'
+  const [activeTab, setActiveTab] = useState<'calendar' | 'notices' | 'deadlines'>(initialTab);
 
   // Synchronize active tab with URL hash
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#/', '').toLowerCase();
-      if (['calendar', 'notices', 'deadlines', 'timetable'].includes(hash)) {
+      if (['calendar', 'notices', 'deadlines'].includes(hash)) {
         setActiveTab(hash as any);
+      } else if (hash === 'timetable') {
+        // Gracefully route legacy timetable links to the unified calendar
+        setActiveTab('calendar');
+        window.location.hash = '#/calendar';
       }
     };
 
@@ -98,24 +105,27 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
 
-  const handleTabChange = (tab: 'calendar' | 'notices' | 'deadlines' | 'timetable') => {
+  const handleTabChange = (tab: 'calendar' | 'notices' | 'deadlines') => {
     setActiveTab(tab);
     window.location.hash = `#/${tab}`;
   };
 
-  // Storage key scoped to authenticated user
-  const eventsStorageKey = getUserStorageKey('notice_decoder_events');
-  const deadlinesStorageKey = getUserStorageKey('notice_decoder_deadlines');
+  // User-scoped storage keys
+  const eventsStorageKey = getUserStorageKey('notice_decoder_events_v2');
+  const deadlinesStorageKey = getUserStorageKey('notice_decoder_deadlines_v2');
 
   // Calendar events state (user-scoped and offline cached)
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() => {
     try {
       const saved = localStorage.getItem(eventsStorageKey);
-      return saved ? JSON.parse(saved) : INITIAL_CALENDAR_EVENTS;
+      return saved ? JSON.parse(saved) : INITIAL_ACADEMIC_EVENTS;
     } catch {
-      return INITIAL_CALENDAR_EVENTS;
+      return INITIAL_ACADEMIC_EVENTS;
     }
   });
+
+  // Selected date on calendar
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string>('2026-11-13');
 
   // Personal deadlines state (user-scoped and offline cached)
   const [deadlines, setDeadlines] = useState<PersonalDeadline[]>(() => {
@@ -163,7 +173,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
   // Notice Input & Decoding state
   const [noticeText, setNoticeText] = useState(TEMPLATE_NOTICES[0].text);
   const [isDecoding, setIsDecoding] = useState(false);
-  const [extractedDraft, setExtractedDraft] = useState<ExtractedNotice | null>(null);
+  const [extractedDraft, setExtractedDraft] = useState<ExtractedNotice & { isoDate: string } | null>(null);
   const [successToast, setSuccessToast] = useState('');
   const [errorToast, setErrorToast] = useState('');
 
@@ -191,6 +201,8 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     let summary = 'Assessment and departmental submissions scheduled. Review extracted hours before calendar sync.';
     let category: 'Examination' | 'Academic' | 'Guest Lecture' | 'Administrative' = 'Academic';
     let urgency: 'high' | 'medium' | 'normal' = 'normal';
+    let isoDate = '2026-11-18';
+    let humanDate = '18 November 2026';
     const flags: { field: string; reason: string; suggestion: string }[] = [];
 
     if (lower.includes('internal test') || lower.includes('csa') || lower.includes('assessment')) {
@@ -203,6 +215,8 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       summary = 'Internal Test 2 scheduled for 10:00–11:30 AM in Room 204. Mandatory practical records due by 12:00 noon.';
       category = 'Examination';
       urgency = 'high';
+      isoDate = '2026-11-18';
+      humanDate = '18 November 2026';
       flags.push({
         field: 'Venue Relocation',
         reason: 'Roll Nos 45–60 tentatively shifted to Room 206 due to electrical clearance.',
@@ -218,10 +232,12 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       summary = 'Dr. Ramanujan expert lecture on distributed microservices. Compulsory attendance for CSE & IT students.';
       category = 'Guest Lecture';
       urgency = 'medium';
+      isoDate = '2026-11-13';
+      humanDate = '13 November 2026';
       flags.push({
         field: 'Timetable Coincidence',
-        reason: '9:30–10:30 AM conflicts with scheduled Lecture (10:00–11:00 AM).',
-        suggestion: 'Department duty leave clearance or alternative slot required.'
+        reason: '09:30–10:30 AM overlaps with scheduled Meeting in Seminar Hall B.',
+        suggestion: 'Clear conflict or reschedule meeting to 11:00 AM.'
       });
     } else if (lower.includes('project') || lower.includes('capstone') || lower.includes('phase 1')) {
       title = 'Project Phase 1 Review';
@@ -233,6 +249,8 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       summary = 'Final year capstone phase 1 evaluation. Review with faculty committee in Project Lab 3.';
       category = 'Academic';
       urgency = 'high';
+      isoDate = '2026-11-14';
+      humanDate = '14 November 2026';
     } else {
       const timeMatch = noticeText.match(/(\d{1,2}:\d{2})\s*(?:AM|PM)?\s*(?:to|–|-)\s*(\d{1,2}:\d{2})\s*(?:AM|PM)?/i);
       if (timeMatch) {
@@ -242,13 +260,16 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       title = 'Decoded Campus Notice';
       venue = 'Main Campus Facility';
       summary = 'Notice parsed successfully. Extracted time and action items are prepared for your review.';
+      isoDate = '2026-11-15';
+      humanDate = '15 November 2026';
     }
 
-    const draft: ExtractedNotice = {
+    const draft: ExtractedNotice & { isoDate: string } = {
       id: `notice-${Date.now()}`,
       title,
       rawText: noticeText,
-      date: '13 November 2026',
+      date: humanDate,
+      isoDate,
       startTime,
       endTime,
       venue,
@@ -271,7 +292,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       const newDl: PersonalDeadline = {
         id: `dl-${Date.now()}`,
         title: `${title} Action Requirement`,
-        dueDate: '13 November 2026',
+        dueDate: humanDate,
         dueTime: deadline,
         action: deadlineAction,
         completed: false,
@@ -288,16 +309,17 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     }
   };
 
-  // Automatic Calendar Integration Flow
+  // Automatic Notice to Calendar Integration Flow
   const handleAddToCalendar = () => {
     if (!extractedDraft) return;
 
+    // Duplicate check: Prevent duplicate entry if title and date match
     const isDuplicate = calendarEvents.some(
-      ev => ev.title.toLowerCase() === extractedDraft.title.toLowerCase()
+      ev => ev.title.toLowerCase() === extractedDraft.title.toLowerCase() && ev.date === extractedDraft.isoDate
     );
 
     if (isDuplicate) {
-      setErrorToast(`"${extractedDraft.title}" is already in your calendar. Duplicate entry prevented.`);
+      setErrorToast(`"${extractedDraft.title}" is already scheduled on ${extractedDraft.isoDate}. Duplicate prevented.`);
       setTimeout(() => setErrorToast(''), 4000);
       return;
     }
@@ -305,17 +327,22 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     const newCalendarEvent: CalendarEvent = {
       id: `ev-decoded-${Date.now()}`,
       title: extractedDraft.title,
+      date: extractedDraft.isoDate,
       startTime: extractedDraft.startTime,
       endTime: extractedDraft.endTime,
-      color: 'amber',
-      date: '2026-11-13',
-      sourceNoticeTitle: extractedDraft.title
+      category: extractedDraft.category as any,
+      color: extractedDraft.category === 'Examination' ? 'amber' : extractedDraft.category === 'Guest Lecture' ? 'forest' : 'blue',
+      venue: extractedDraft.venue,
+      description: extractedDraft.summary,
+      sourceNoticeTitle: extractedDraft.title,
+      uncertainFlags: extractedDraft.uncertainFlags
     };
 
     const updated = [...calendarEvents, newCalendarEvent];
     handleCalendarChange(updated);
+    setSelectedCalendarDate(extractedDraft.isoDate);
 
-    setSuccessToast(`Added "${extractedDraft.title}" directly to calendar! Switched to Calendar view.`);
+    setSuccessToast(`Added "${extractedDraft.title}" directly to your academic calendar on ${extractedDraft.isoDate}!`);
     setTimeout(() => {
       setSuccessToast('');
       handleTabChange('calendar');
@@ -337,14 +364,13 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                 Notice Decoder
               </span>
               <span className="text-[10px] font-mono uppercase tracking-widest text-[#10380B] font-semibold">
-                Protected Campus Workspace
+                Personal Academic Calendar & Intelligence
               </span>
             </div>
           </div>
 
-          {/* Network & Sync Status + User Profile Info & Sign Out */}
+          {/* Network Status + User Profile Info & Sign Out */}
           <div className="flex items-center gap-3 md:gap-5">
-            {/* Live Online / Offline Indicator Badge */}
             <div className="hidden sm:flex items-center gap-2">
               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border ${
                 isOnline 
@@ -384,9 +410,11 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
         </div>
       </header>
 
-      {/* 2. SUB-NAVIGATION TABS */}
+      {/* 2. UNIFIED WORKSPACE TABS (Removed Separate Course Timetable) */}
       <div className="bg-[#FAF8DB]/60 border-b border-[#E8E5BA] px-6">
         <div className="max-w-6xl mx-auto flex items-center gap-1 sm:gap-2 overflow-x-auto py-2">
+          
+          {/* Unified Personal Academic Calendar Tab */}
           <button
             type="button"
             onClick={() => handleTabChange('calendar')}
@@ -396,13 +424,14 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                 : 'text-[#172D50]/70 hover:bg-[#FAF8DB] hover:text-[#172D50]'
             }`}
           >
-            <Calendar className="w-3.5 h-3.5" />
+            <CalendarIcon className="w-3.5 h-3.5" />
             <span>Academic Calendar</span>
             <span className="px-1.5 py-0.2 rounded text-[10px] bg-black/20 text-white/90">
               {calendarEvents.length}
             </span>
           </button>
 
+          {/* Notice Decoder Tab */}
           <button
             type="button"
             onClick={() => handleTabChange('notices')}
@@ -416,6 +445,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
             <span>Notice Decoder</span>
           </button>
 
+          {/* Personal Deadlines Tab */}
           <button
             type="button"
             onClick={() => handleTabChange('deadlines')}
@@ -430,19 +460,6 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
             <span className="px-1.5 py-0.2 rounded text-[10px] bg-[#E65100]/20 text-[#E65100] font-bold">
               {deadlines.filter(d => !d.completed).length}
             </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleTabChange('timetable')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-mono font-medium flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'timetable'
-                ? 'bg-[#172D50] text-[#FEFDE6] shadow-xs'
-                : 'text-[#172D50]/70 hover:bg-[#FAF8DB] hover:text-[#172D50]'
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Course Timetable</span>
           </button>
         </div>
       </div>
@@ -466,40 +483,16 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
         )}
 
         {/* ============================================================ */}
-        {/* TAB 1: ACADEMIC CALENDAR (Timeline, Day, Week, Month)         */}
+        {/* TAB 1: INTEGRATED PERSONAL ACADEMIC CALENDAR                 */}
+        {/* Monthly Grid on Top + Selected-Day Agenda Directly Below    */}
         {/* ============================================================ */}
         {activeTab === 'calendar' && (
           <div className="space-y-6 animate-fade-in">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono tracking-wider text-[#10380B] uppercase mb-2">
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>Private Academic Calendar</span>
-                </div>
-                <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#172D50]">
-                  Active Schedule & Conflict Visualizer
-                </h1>
-                <p className="text-xs text-[#172D50]/70 font-sans mt-0.5">
-                  Evaluates complete duration overlaps across meetings, lectures, and newly decoded notices in Timeline, Day, Week, and Month views.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleTabChange('notices')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-colors text-xs font-mono cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-[#F2EE98]" />
-                  <span>Decode Notice to Add</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Complete Built-in Calendar Component */}
-            <TimelineCalendar
+            <PersonalAcademicCalendar
               events={calendarEvents}
               onEventsChange={handleCalendarChange}
+              selectedDate={selectedCalendarDate}
+              onSelectDate={setSelectedCalendarDate}
             />
           </div>
         )}
@@ -521,7 +514,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                 Notice Ingestion & Schedule Synchronizer
               </h1>
               <p className="mt-1 text-sm text-[#172D50]/70">
-                Paste an unstructured academic circular to extract dates, identify buried deadlines, and check timetable overlaps.
+                Paste an unstructured academic circular to extract dates, identify buried deadlines, and automatically schedule events into your personal calendar.
               </p>
             </div>
 
@@ -623,7 +616,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                           {extractedDraft.startTime} – {extractedDraft.endTime}
                         </span>
                         <span className="font-mono text-[10px] text-[#172D50]/60">
-                          {extractedDraft.date}
+                          {extractedDraft.date} ({extractedDraft.isoDate})
                         </span>
                       </div>
 
@@ -670,15 +663,15 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                       </div>
                     )}
 
-                    {/* Actions: Add to Live Calendar & Export ICS */}
+                    {/* Actions: Add to Personal Calendar & Export ICS */}
                     <div className="pt-3 border-t border-[#E8E5BA] flex flex-wrap items-center justify-between gap-3">
                       <button
                         type="button"
                         onClick={handleAddToCalendar}
                         className="px-4 py-2 rounded-lg bg-[#10380B] text-[#FEFDE6] hover:bg-[#185311] transition-all font-mono text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-xs"
                       >
-                        <Calendar className="w-3.5 h-3.5 text-[#F2EE98]" />
-                        <span>Sync with Calendar</span>
+                        <CalendarIcon className="w-3.5 h-3.5 text-[#F2EE98]" />
+                        <span>Add to Personal Academic Calendar</span>
                       </button>
 
                       <button
@@ -784,59 +777,6 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                     }`}>
                       {item.priority} priority
                     </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ============================================================ */}
-        {/* TAB 4: COURSE TIMETABLE & CLASH DETECTOR                    */}
-        {/* ============================================================ */}
-        {activeTab === 'timetable' && (
-          <div className="space-y-6 animate-fade-in">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono tracking-wider text-[#10380B] uppercase mb-2">
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span>Enrolled Course Timetable</span>
-                </div>
-                <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#172D50]">
-                  Weekly Lectures & Clash Check
-                </h1>
-                <p className="text-xs text-[#172D50]/70 font-sans mt-0.5">
-                  Your regular course lectures used to automatically detect timetable conflicts with new notices.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
-              {[
-                { code: 'CS-302', course: 'Computer System Architecture (CSA)', time: '10:00–11:00 AM', day: 'Wed, Thu', room: 'Room 204', faculty: 'Dr. S. Mehta' },
-                { code: 'CS-304', course: 'Database Management Systems (DBMS)', time: '11:15–12:15 PM', day: 'Mon, Tue', room: 'Hall 102', faculty: 'Prof. K. Iyer' },
-                { code: 'CS-306', course: 'Operating Systems & Concurrency', time: '02:00–03:00 PM', day: 'Mon, Wed', room: 'Room 301', faculty: 'Dr. V. Sharma' },
-                { code: 'CS-308', course: 'Design & Analysis of Algorithms', time: '03:15–04:15 PM', day: 'Tue, Thu', room: 'Hall 205', faculty: 'Prof. N. Patel' }
-              ].map(course => (
-                <div key={course.code} className="p-5 rounded-2xl bg-[#FAF8DB]/70 border border-[#E8E5BA] shadow-xs flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold text-[#172D50] text-sm">{course.code}</span>
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-[#FEFDE6] border border-[#E8E5BA] text-[#10380B] font-semibold">
-                        {course.day}
-                      </span>
-                    </div>
-                    <span className="font-serif font-semibold text-sm text-[#172D50] block mb-2">
-                      {course.course}
-                    </span>
-                    <div className="flex items-center gap-3 text-[11px] text-[#172D50]/70">
-                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {course.time}</span>
-                      <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {course.room}</span>
-                    </div>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-[#E8E5BA] flex items-center justify-between text-[11px] text-[#172D50]/60">
-                    <span>Instructor: {course.faculty}</span>
-                    <span className="text-[#10380B] font-semibold">Active Enrolled</span>
                   </div>
                 </div>
               ))}
