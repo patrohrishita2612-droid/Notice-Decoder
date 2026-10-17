@@ -1,5 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Clock, RotateCcw, Check, Trash2, X } from 'lucide-react';
+import { 
+  Plus, Clock, RotateCcw, Trash2, X, 
+  Calendar as CalendarIcon, ChevronLeft, ChevronRight, AlertTriangle 
+} from 'lucide-react';
 
 export interface CalendarEvent {
   id: string;
@@ -7,6 +10,7 @@ export interface CalendarEvent {
   startTime: string; // "HH:mm" e.g. "09:30"
   endTime: string;   // "HH:mm" e.g. "10:30"
   color: 'cyan' | 'blue' | 'forest' | 'amber';
+  date?: string;     // e.g. "2026-11-13"
   sourceNoticeTitle?: string;
   isDeadlineOnly?: boolean;
 }
@@ -17,14 +21,16 @@ export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [
     title: 'Meeting',
     startTime: '09:30',
     endTime: '10:30',
-    color: 'cyan'
+    color: 'cyan',
+    date: '2026-11-13'
   },
   {
     id: 'ev-2',
     title: 'Lecture',
     startTime: '10:00',
     endTime: '11:00',
-    color: 'blue'
+    color: 'blue',
+    date: '2026-11-13'
   }
 ];
 
@@ -77,6 +83,10 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
     onEventsChange?.(newEvents);
   };
 
+  // View switch: Timeline (prototype reference), Day, Week, Month
+  const [calendarView, setCalendarView] = useState<'timeline' | 'day' | 'week' | 'month'>('timeline');
+
+  // Interactive modes: 'idle' | 'add' | 'reschedule'
   const [activeMode, setActiveMode] = useState<'idle' | 'add' | 'reschedule'>('idle');
 
   // Form states for Add Event
@@ -89,8 +99,8 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
   // State for Reschedule
   const [selectedEventId, setSelectedEventId] = useState<string>(events[0]?.id || 'ev-1');
 
-  // Dynamic Scale and Coordinates Calculation
-  const { scaleStart, totalSpan, ticks, computedEvents, conflict } = useMemo(() => {
+  // Dynamic Scale and Coordinates Calculation for Timeline view
+  const { ticks, computedEvents, conflict } = useMemo(() => {
     const starts = events.map(e => parseTimeToMinutes(e.startTime));
     const ends = events.map(e => parseTimeToMinutes(e.endTime));
 
@@ -98,225 +108,273 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
     const maxM = ends.length > 0 ? Math.max(...ends) : 690;
 
     // Floor to nearest 30 mins, minimum 9:00 AM (540 mins)
-    const scaleStart = Math.min(540, Math.floor(minM / 30) * 30);
-    // Ceil to nearest 30 mins, minimum 11:30 AM (690 mins)
-    const scaleEnd = Math.max(690, Math.ceil(maxM / 30) * 30);
-    const totalSpan = Math.max(60, scaleEnd - scaleStart);
+    const baseMin = Math.min(540, Math.floor(minM / 30) * 30);
+    // Ceil to nearest 30 mins, maximum 12:00 PM (720 mins) or whatever fits the events
+    const baseMax = Math.max(690, Math.ceil(maxM / 30) * 30);
 
-    // Dynamic 30-minute axis markers
-    const ticks: number[] = [];
-    for (let t = scaleStart; t <= scaleEnd; t += 30) {
-      ticks.push(t);
+    const span = Math.max(60, baseMax - baseMin);
+
+    // Generate ticks every 30 mins
+    const tickList: { minute: number; label: string; pct: number }[] = [];
+    for (let m = baseMin; m <= baseMax; m += 30) {
+      tickList.push({
+        minute: m,
+        label: formatMinutes(m),
+        pct: ((m - baseMin) / span) * 100
+      });
     }
 
-    // Compute relative layout coordinates for each event bar
-    const computedEvents = events.map(e => {
-      const startM = parseTimeToMinutes(e.startTime);
-      const endM = parseTimeToMinutes(e.endTime);
-      const duration = Math.max(0, endM - startM);
-      const leftPct = ((startM - scaleStart) / totalSpan) * 100;
-      const widthPct = (duration / totalSpan) * 100;
+    // Compute layout for each event bar
+    const mapped = events.map(ev => {
+      const s = parseTimeToMinutes(ev.startTime);
+      const e = parseTimeToMinutes(ev.endTime);
+      const leftPct = Math.max(0, Math.min(100, ((s - baseMin) / span) * 100));
+      const widthPct = Math.max(4, Math.min(100 - leftPct, ((e - s) / span) * 100));
 
       return {
-        ...e,
-        startM,
-        endM,
-        duration,
-        leftPct: Math.max(0, Math.min(100, leftPct)),
-        widthPct: Math.max(0, Math.min(100 - leftPct, widthPct)),
-        label: `${e.title} ${formatMinutes(startM)}–${formatMinutes(endM)}`
+        ...ev,
+        startM: s,
+        endM: e,
+        leftPct,
+        widthPct,
+        label: `${ev.title} ${ev.startTime}–${ev.endTime}`
       };
     });
 
-    // Detect full-duration conflicts across all pairs
-    let primaryConflict = {
-      hasConflict: false,
-      overlapMinutes: 0,
-      marker1LeftPct: 0,
-      marker2LeftPct: 0,
-      overlapLeftPct: 0,
-      overlapWidthPct: 0,
-      conflictingTitleA: '',
-      conflictingTitleB: '',
-      description: ''
-    };
+    // Detect overlap across all pairs of events
+    let hasConflict = false;
+    let overlapMinutes = 0;
+    let overlapStart = 0;
+    let overlapEnd = 0;
+    let affectedPair: [string, string] = ['', ''];
 
-    for (let i = 0; i < computedEvents.length; i++) {
-      for (let j = i + 1; j < computedEvents.length; j++) {
-        const a = computedEvents[i];
-        const b = computedEvents[j];
+    for (let i = 0; i < mapped.length; i++) {
+      for (let j = i + 1; j < mapped.length; j++) {
+        const evA = mapped[i];
+        const evB = mapped[j];
 
-        const overlapStart = Math.max(a.startM, b.startM);
-        const overlapEnd = Math.min(a.endM, b.endM);
-        const overlapM = overlapEnd - overlapStart;
+        const oStart = Math.max(evA.startM, evB.startM);
+        const oEnd = Math.min(evA.endM, evB.endM);
 
-        if (overlapM > 0) {
-          const earlierStart = Math.min(a.startM, b.startM);
-          primaryConflict = {
-            hasConflict: true,
-            overlapMinutes: overlapM,
-            marker1LeftPct: ((earlierStart - scaleStart) / totalSpan) * 100,
-            marker2LeftPct: ((overlapStart - scaleStart) / totalSpan) * 100,
-            overlapLeftPct: ((overlapStart - scaleStart) / totalSpan) * 100,
-            overlapWidthPct: (overlapM / totalSpan) * 100,
-            conflictingTitleA: a.title,
-            conflictingTitleB: b.title,
-            description: `${overlapM} min overlap: check the full duration`
-          };
-          break;
+        if (oEnd > oStart) {
+          hasConflict = true;
+          const diff = oEnd - oStart;
+          if (diff > overlapMinutes) {
+            overlapMinutes = diff;
+            overlapStart = oStart;
+            overlapEnd = oEnd;
+            affectedPair = [evA.title, evB.title];
+          }
         }
       }
-      if (primaryConflict.hasConflict) break;
+    }
+
+    // Specific markers for the primary overlap
+    const marker1Pct = ((overlapStart - baseMin) / span) * 100;
+    const marker2Pct = ((overlapEnd - baseMin) / span) * 100;
+    const overlapLeftPct = Math.min(marker1Pct, marker2Pct);
+    const overlapWidthPct = Math.abs(marker2Pct - marker1Pct);
+
+    let desc = '0 min overlap: check the full duration (Clear)';
+    if (hasConflict) {
+      desc = `${overlapMinutes} min overlap: check the full duration`;
     }
 
     return {
-      scaleStart,
-      totalSpan,
-      ticks,
-      computedEvents,
-      conflict: primaryConflict
+      scaleStart: baseMin,
+      totalSpan: span,
+      ticks: tickList,
+      computedEvents: mapped,
+      conflict: {
+        hasConflict,
+        overlapMinutes,
+        overlapStart,
+        overlapEnd,
+        affectedPair,
+        marker1LeftPct: marker1Pct,
+        marker2LeftPct: marker2Pct,
+        overlapLeftPct,
+        overlapWidthPct,
+        description: desc
+      }
     };
   }, [events]);
 
-  const currentSelectedEvent = events.find(e => e.id === selectedEventId) || events[0];
+  // Selected event object for reschedule mode
+  const selectedEvent = events.find(e => e.id === selectedEventId) || events[0];
 
+  // Shift selected event by +/- minutes
+  const handleShiftSelected = (deltaMinutes: number) => {
+    if (!selectedEvent) return;
+
+    const s = parseTimeToMinutes(selectedEvent.startTime);
+    const e = parseTimeToMinutes(selectedEvent.endTime);
+    const duration = e - s;
+
+    let newS = s + deltaMinutes;
+    // Keep within reasonable day boundary (08:00 to 20:00)
+    if (newS < 480) newS = 480;
+    if (newS + duration > 1200) newS = 1200 - duration;
+
+    const newE = newS + duration;
+
+    const updated = events.map(ev => {
+      if (ev.id === selectedEvent.id) {
+        return {
+          ...ev,
+          startTime: formatMinutes(newS),
+          endTime: formatMinutes(newE)
+        };
+      }
+      return ev;
+    });
+
+    updateEvents(updated);
+  };
+
+  // Add Event submit
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
 
-    const startM = parseTimeToMinutes(newStartTime);
-    const endM = parseTimeToMinutes(newEndTime);
+    const s = parseTimeToMinutes(newStartTime);
+    const en = parseTimeToMinutes(newEndTime);
 
-    if (!newTitle.trim()) {
-      setFormError('Please enter an event title');
+    if (en <= s) {
+      setFormError('End time must be after start time.');
       return;
     }
-    if (endM <= startM) {
-      setFormError('End time must be after start time');
+
+    if (en - s < 15) {
+      setFormError('Duration must be at least 15 minutes.');
       return;
     }
 
     const newEv: CalendarEvent = {
       id: `ev-${Date.now()}`,
-      title: newTitle.trim(),
+      title: newTitle.trim() || 'New Event',
       startTime: newStartTime,
       endTime: newEndTime,
-      color: newColor
+      color: newColor,
+      date: '2026-11-13'
     };
 
-    const updated = [...events, newEv];
-    updateEvents(updated);
-    setSelectedEventId(newEv.id);
+    updateEvents([...events, newEv]);
     setActiveMode('idle');
   };
 
-  const handleTimeShift = (minutesDelta: number) => {
-    if (!currentSelectedEvent) return;
-    const curStartM = parseTimeToMinutes(currentSelectedEvent.startTime);
-    const curEndM = parseTimeToMinutes(currentSelectedEvent.endTime);
-    const duration = curEndM - curStartM;
-
-    const newStartM = Math.max(480, Math.min(1320, curStartM + minutesDelta));
-    const newEndM = newStartM + duration;
-
-    const updated = events.map(e =>
-      e.id === currentSelectedEvent.id
-        ? {
-            ...e,
-            startTime: `${Math.floor(newStartM / 60)}:${(newStartM % 60) < 10 ? '0' : ''}${newStartM % 60}`,
-            endTime: `${Math.floor(newEndM / 60)}:${(newEndM % 60) < 10 ? '0' : ''}${newEndM % 60}`
-          }
-        : e
-    );
+  // Delete event
+  const handleDeleteSelected = (idToDelete: string) => {
+    if (events.length <= 1) {
+      alert('Keep at least one event on the calendar.');
+      return;
+    }
+    const updated = events.filter(e => e.id !== idToDelete);
     updateEvents(updated);
+    if (selectedEventId === idToDelete && updated.length > 0) {
+      setSelectedEventId(updated[0].id);
+    }
   };
 
-  const handleUpdateSelectedTimes = (newStart: string, newEnd: string) => {
-    const sM = parseTimeToMinutes(newStart);
-    const eM = parseTimeToMinutes(newEnd);
-    if (eM <= sM) return;
-
-    const updated = events.map(e =>
-      e.id === currentSelectedEvent?.id
-        ? { ...e, startTime: newStart, endTime: newEnd }
-        : e
-    );
-    updateEvents(updated);
-  };
-
-  const handleDeleteEvent = (id: string) => {
-    if (events.length <= 1) return;
-    const remaining = events.filter(e => e.id !== id);
-    updateEvents(remaining);
-    setSelectedEventId(remaining[0]?.id || '');
-  };
-
+  // Reset to sample reference state
   const handleResetSample = () => {
     updateEvents(INITIAL_CALENDAR_EVENTS);
-    setSelectedEventId('ev-1');
+    setSelectedEventId(INITIAL_CALENDAR_EVENTS[0].id);
     setActiveMode('idle');
-    setFormError('');
   };
 
   return (
-    <div className="w-full">
-      {/* Anchor for conflicts navigation */}
-      <div id="conflicts" className="relative -top-24" />
+    <section className={`w-full ${compact ? 'py-4' : 'py-8'}`}>
+      <div className="max-w-4xl mx-auto">
+        
+        {/* Header with Title and View Switcher */}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#172D50]">
+            {title}
+          </h2>
 
-      {/* Heading matching original editorial design */}
-      {!compact && (
-        <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold text-[#172D50] text-center mb-8 tracking-tight">
-          {title}
-        </h2>
-      )}
+          {/* View Mode Selector: Timeline, Day, Week, Month */}
+          <div className="inline-flex items-center rounded-lg bg-[#FAF8DB] p-1 border border-[#E8E5BA] text-xs font-mono">
+            <button
+              type="button"
+              onClick={() => setCalendarView('timeline')}
+              className={`px-3 py-1.5 rounded-md font-medium transition-all ${
+                calendarView === 'timeline'
+                  ? 'bg-[#172D50] text-[#FEFDE6] shadow-2xs'
+                  : 'text-[#172D50]/70 hover:text-[#172D50]'
+              }`}
+            >
+              Timeline View
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalendarView('day')}
+              className={`px-3 py-1.5 rounded-md font-medium transition-all ${
+                calendarView === 'day'
+                  ? 'bg-[#172D50] text-[#FEFDE6] shadow-2xs'
+                  : 'text-[#172D50]/70 hover:text-[#172D50]'
+              }`}
+            >
+              Day
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalendarView('week')}
+              className={`px-3 py-1.5 rounded-md font-medium transition-all ${
+                calendarView === 'week'
+                  ? 'bg-[#172D50] text-[#FEFDE6] shadow-2xs'
+                  : 'text-[#172D50]/70 hover:text-[#172D50]'
+              }`}
+            >
+              Week
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalendarView('month')}
+              className={`px-3 py-1.5 rounded-md font-medium transition-all ${
+                calendarView === 'month'
+                  ? 'bg-[#172D50] text-[#FEFDE6] shadow-2xs'
+                  : 'text-[#172D50]/70 hover:text-[#172D50]'
+              }`}
+            >
+              Month
+            </button>
+          </div>
+        </div>
 
-      {/* Cream-colored Timeline Calendar Container matching original design */}
-      <div className="bg-[#FAF8DB]/40 border border-[#E8E5BA] rounded-xl p-5 sm:p-7 shadow-xs">
-        <div className="overflow-x-auto pb-2">
-          <div className="min-w-[540px]">
-            {/* Horizontal Time Axis Header */}
-            <div className="relative h-6 text-xs font-mono text-[#172D50]/60 mb-3 select-none">
-              {ticks.map((tickM, idx) => {
-                const tickLeftPct = ((tickM - scaleStart) / totalSpan) * 100;
-                const isMarkerTick =
-                  conflict.hasConflict &&
-                  (tickM === Math.round(scaleStart + (conflict.marker1LeftPct * totalSpan) / 100) ||
-                    tickM === Math.round(scaleStart + (conflict.marker2LeftPct * totalSpan) / 100));
-
-                return (
-                  <span
-                    key={idx}
-                    className={`absolute -translate-x-1/2 transition-colors duration-200 ${
-                      isMarkerTick ? 'font-semibold text-[#dc2626]' : ''
-                    }`}
-                    style={{ left: `${tickLeftPct}%` }}
-                  >
-                    {formatMinutes(tickM)}
-                  </span>
-                );
-              })}
+        {/* ============================================================ */}
+        {/* 1. TIMELINE VIEW (The Original Reference Specimen)           */}
+        {/* ============================================================ */}
+        {calendarView === 'timeline' && (
+          <div className="bg-[#FAF8DB]/90 border border-[#E8E5BA] rounded-2xl p-6 sm:p-8 shadow-xs relative overflow-hidden transition-all">
+            
+            {/* Timeline Tick Labels */}
+            <div className="relative w-full h-6 mb-2">
+              {ticks.map((t) => (
+                <span
+                  key={t.minute}
+                  className="absolute text-xs sm:text-sm font-mono text-[#172D50]/60 -translate-x-1/2 select-none"
+                  style={{ left: `${t.pct}%` }}
+                >
+                  {t.label}
+                </span>
+              ))}
             </div>
 
-            {/* Timeline Track with Overlapping Event Bars */}
-            <div 
-              className="relative bg-[#FEFDE6] rounded-lg border border-[#E8E5BA] p-4 flex flex-col justify-center gap-3 overflow-hidden transition-all duration-200"
-              style={{ minHeight: `${Math.max(140, computedEvents.length * 52 + 30)}px` }}
-            >
-              {/* Vertical grid lines at 30-min intervals */}
-              <div className="absolute inset-0 pointer-events-none">
-                {ticks.map((tickM, idx) => {
-                  const tickLeftPct = ((tickM - scaleStart) / totalSpan) * 100;
-                  return (
-                    <div
-                      key={idx}
-                      className="absolute top-0 bottom-0 w-[1px] bg-[#E8E5BA]/40"
-                      style={{ left: `${tickLeftPct}%` }}
-                    />
-                  );
-                })}
-              </div>
+            {/* Time Bar Canvas */}
+            <div className="relative w-full py-4 space-y-3.5 min-h-[140px] flex flex-col justify-center">
+              
+              {/* Vertical Grid Lines for each tick */}
+              {ticks.map((t) => (
+                <div
+                  key={`line-${t.minute}`}
+                  className="absolute top-0 bottom-0 border-l border-[#E8E5BA] pointer-events-none"
+                  style={{ left: `${t.pct}%` }}
+                  aria-hidden="true"
+                />
+              ))}
 
-              {/* Red dashed vertical marker 1 (Meeting start e.g. 9:30) */}
+              {/* Red Dashed Marker 1: Meeting Start / Overlap Start */}
               {conflict.hasConflict && (
                 <div
                   className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#dc2626] z-20 pointer-events-none transition-all duration-300"
@@ -325,7 +383,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                 />
               )}
 
-              {/* Red dashed vertical marker 2 (Overlap boundary e.g. 10:00) */}
+              {/* Red Dashed Marker 2: Overlap Boundary */}
               {conflict.hasConflict && (
                 <div
                   className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#dc2626] z-20 pointer-events-none transition-all duration-300"
@@ -387,13 +445,13 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
               </p>
             </div>
 
-            {/* Editorial Inline Event Controls */}
+            {/* Inline Event Controls */}
             <div className="mt-5 pt-3 border-t border-[#E8E5BA]/60 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-[#172D50]">
-              {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setActiveMode(prev => (prev === 'add' ? 'idle' : 'add'))}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
                     activeMode === 'add'
                       ? 'bg-[#172D50] text-[#FEFDE6] border-[#172D50]'
                       : 'bg-[#FEFDE6] border-[#E8E5BA] text-[#172D50] hover:bg-[#F2EE98]/40'
@@ -404,8 +462,9 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => setActiveMode(prev => (prev === 'reschedule' ? 'idle' : 'reschedule'))}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
                     activeMode === 'reschedule'
                       ? 'bg-[#172D50] text-[#FEFDE6] border-[#172D50]'
                       : 'bg-[#FEFDE6] border-[#E8E5BA] text-[#172D50] hover:bg-[#F2EE98]/40'
@@ -415,8 +474,9 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                   <span>Reschedule</span>
                 </button>
 
-                {/* Quick Preset Buttons */}
+                {/* Quick Presets */}
                 <button
+                  type="button"
                   onClick={() => {
                     const updated = events.map(e =>
                       e.color === 'cyan'
@@ -425,12 +485,13 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                     );
                     updateEvents(updated);
                   }}
-                  className="px-2 py-1 rounded text-[11px] bg-[#FEFDE6] border border-[#E8E5BA] hover:bg-[#FAF8DB] text-[#172D50]/80"
+                  className="px-2 py-1 rounded text-[11px] bg-[#FEFDE6] border border-[#E8E5BA] hover:bg-[#FAF8DB] text-[#172D50]/80 cursor-pointer"
                 >
                   9:30 (Overlap)
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     const updated = events.map(e =>
                       e.color === 'cyan'
@@ -439,7 +500,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                     );
                     updateEvents(updated);
                   }}
-                  className="px-2 py-1 rounded text-[11px] bg-[#FEFDE6] border border-[#E8E5BA] hover:bg-[#FAF8DB] text-[#10380B] font-medium"
+                  className="px-2 py-1 rounded text-[11px] bg-[#FEFDE6] border border-[#E8E5BA] hover:bg-[#FAF8DB] text-[#10380B] font-medium cursor-pointer"
                 >
                   11:00 (Clear)
                 </button>
@@ -447,180 +508,414 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
 
               {/* Reset to Original Specimen */}
               <button
+                type="button"
                 onClick={handleResetSample}
-                className="inline-flex items-center gap-1 text-[11px] text-[#172D50]/60 hover:text-[#172D50] hover:underline"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-[#172D50]/60 hover:text-[#172D50] transition-colors cursor-pointer"
+                title="Reset to 9:30 Meeting vs 10:00 Lecture"
               >
                 <RotateCcw className="w-3 h-3" />
                 <span>Reset Sample</span>
               </button>
             </div>
+          </div>
+        )}
 
-            {/* Inline Panel: Add Event Form */}
-            {activeMode === 'add' && (
-              <form
-                onSubmit={handleAddSubmit}
-                className="mt-4 p-3.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] flex flex-wrap items-center gap-3 text-xs font-mono animate-fade-in"
-              >
-                <div className="flex-1 min-w-[120px]">
-                  <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Title</span>
-                  <input
-                    type="text"
-                    value={newTitle}
-                    onChange={e => setNewTitle(e.target.value)}
-                    placeholder="Title"
-                    className="w-full px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50]"
-                  />
+        {/* ============================================================ */}
+        {/* 2. DAY VIEW (Hourly Schedule Grid 08:00–18:00)               */}
+        {/* ============================================================ */}
+        {calendarView === 'day' && (
+          <div className="bg-[#FAF8DB]/90 border border-[#E8E5BA] rounded-2xl p-6 shadow-xs animate-fade-in">
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#E8E5BA]">
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="w-4 h-4 text-[#10380B]" />
+                <span className="font-serif font-bold text-base text-[#172D50]">
+                  Wednesday, 13 November 2026
+                </span>
+              </div>
+              <span className="text-xs font-mono text-[#172D50]/60 px-2 py-0.5 rounded bg-[#FEFDE6] border border-[#E8E5BA]">
+                {events.length} Scheduled Events
+              </span>
+            </div>
+
+            {/* Overlap Alert if Conflict Exists */}
+            {conflict.hasConflict && (
+              <div className="mb-4 p-3 rounded-xl bg-[#FFF0F0] border border-[#FCA5A5] flex items-center justify-between text-xs font-mono text-[#B91C1C]">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>Conflict Detected: {conflict.affectedPair.join(' & ')} ({conflict.overlapMinutes}m clash)</span>
                 </div>
-
-                <div>
-                  <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Start</span>
-                  <input
-                    type="text"
-                    value={newStartTime}
-                    onChange={e => setNewStartTime(e.target.value)}
-                    placeholder="09:30"
-                    className="w-20 px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50]"
-                  />
-                </div>
-
-                <div>
-                  <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">End</span>
-                  <input
-                    type="text"
-                    value={newEndTime}
-                    onChange={e => setNewEndTime(e.target.value)}
-                    placeholder="10:30"
-                    className="w-20 px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50]"
-                  />
-                </div>
-
-                <div>
-                  <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Type</span>
-                  <select
-                    value={newColor}
-                    onChange={e => setNewColor(e.target.value as 'cyan' | 'blue' | 'forest' | 'amber')}
-                    className="px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50]"
-                  >
-                    <option value="forest">Lecture</option>
-                    <option value="cyan">Meeting</option>
-                    <option value="blue">Course Slot</option>
-                    <option value="amber">Notice Event</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2 pt-4">
-                  <button
-                    type="submit"
-                    className="px-3 py-1 rounded bg-[#10380B] text-[#FEFDE6] font-medium hover:bg-[#1A5413]"
-                  >
-                    Add
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveMode('idle')}
-                    className="p-1 rounded text-[#172D50]/60 hover:text-[#172D50]"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {formError && (
-                  <div className="w-full text-[#dc2626] text-[11px]">{formError}</div>
-                )}
-              </form>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMode('reschedule');
+                  }}
+                  className="underline font-semibold"
+                >
+                  Resolve Slot
+                </button>
+              </div>
             )}
 
-            {/* Inline Panel: Reschedule Controls */}
-            {activeMode === 'reschedule' && currentSelectedEvent && (
-              <div className="mt-4 p-3.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] flex flex-wrap items-center justify-between gap-3 text-xs font-mono animate-fade-in">
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* Event Selector */}
-                  <div>
-                    <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Target Event</span>
-                    <select
-                      value={selectedEventId}
-                      onChange={e => setSelectedEventId(e.target.value)}
-                      className="px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50] font-semibold"
-                    >
-                      {events.map(ev => (
-                        <option key={ev.id} value={ev.id}>
-                          {ev.title} ({ev.startTime}–{ev.endTime})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+            {/* Hourly Schedule Rows */}
+            <div className="divide-y divide-[#E8E5BA]/60 font-mono text-xs">
+              {['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'].map((hourStr) => {
+                const hourMin = parseTimeToMinutes(hourStr);
+                const nextHourMin = hourMin + 60;
+                const slotEvents = events.filter(e => {
+                  const s = parseTimeToMinutes(e.startTime);
+                  const en = parseTimeToMinutes(e.endTime);
+                  return (s >= hourMin && s < nextHourMin) || (s < hourMin && en > hourMin);
+                });
 
-                  {/* Step Shift Buttons */}
-                  <div>
-                    <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Quick Shift</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleTimeShift(-15)}
-                        className="px-2 py-1 rounded bg-[#FAF8DB] border border-[#E8E5BA] hover:bg-[#F2EE98]/40"
-                      >
-                        -15m
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleTimeShift(15)}
-                        className="px-2 py-1 rounded bg-[#FAF8DB] border border-[#E8E5BA] hover:bg-[#F2EE98]/40"
-                      >
-                        +15m
-                      </button>
+                return (
+                  <div key={hourStr} className="py-2.5 flex items-start gap-4">
+                    <span className="w-16 text-[#172D50]/50 shrink-0 pt-1">{hourStr}</span>
+                    <div className="flex-1 flex flex-wrap gap-2">
+                      {slotEvents.length > 0 ? (
+                        slotEvents.map(ev => (
+                          <div
+                            key={ev.id}
+                            onClick={() => {
+                              setSelectedEventId(ev.id);
+                              setActiveMode('reschedule');
+                            }}
+                            className={`px-3 py-1.5 rounded-lg border flex items-center justify-between gap-3 text-xs cursor-pointer hover:shadow-xs transition-all ${
+                              ev.color === 'cyan'
+                                ? 'bg-[#06b6d4]/15 border-[#06b6d4] text-[#0891b2] font-semibold'
+                                : ev.color === 'blue'
+                                ? 'bg-[#1d4ed8]/15 border-[#1d4ed8] text-[#1d4ed8] font-semibold'
+                                : 'bg-[#10380B]/10 border-[#10380B] text-[#10380B] font-semibold'
+                            }`}
+                          >
+                            <span>{ev.title} ({ev.startTime}–{ev.endTime})</span>
+                            <span className="text-[10px] text-[#172D50]/60 underline">Edit</span>
+                          </div>
+                        ))
+                      ) : (
+                        <span className="text-[11px] text-[#172D50]/30 pt-1 italic">Free Slot</span>
+                      )}
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-                  {/* Manual time adjust */}
-                  <div>
-                    <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Times</span>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        value={currentSelectedEvent.startTime}
-                        onChange={e =>
-                          handleUpdateSelectedTimes(e.target.value, currentSelectedEvent.endTime)
-                        }
-                        className="w-16 px-1.5 py-1 rounded border border-[#E8E5BA] bg-white text-center"
-                      />
-                      <span>–</span>
-                      <input
-                        type="text"
-                        value={currentSelectedEvent.endTime}
-                        onChange={e =>
-                          handleUpdateSelectedTimes(currentSelectedEvent.startTime, e.target.value)
-                        }
-                        className="w-16 px-1.5 py-1 rounded border border-[#E8E5BA] bg-white text-center"
-                      />
-                    </div>
+        {/* ============================================================ */}
+        {/* 3. WEEK VIEW (Monday to Friday 5-Column Grid)                */}
+        {/* ============================================================ */}
+        {calendarView === 'week' && (
+          <div className="bg-[#FAF8DB]/90 border border-[#E8E5BA] rounded-2xl p-6 shadow-xs animate-fade-in">
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#E8E5BA]">
+              <span className="font-serif font-bold text-base text-[#172D50]">
+                Week 46 · Nov 10 – Nov 14, 2026
+              </span>
+              <span className="text-xs font-mono text-[#10380B]">
+                Academic Timetable Synced
+              </span>
+            </div>
+
+            <div className="grid grid-cols-5 gap-3">
+              {[
+                { day: 'Mon', date: 'Nov 10' },
+                { day: 'Tue', date: 'Nov 11' },
+                { day: 'Wed', date: 'Nov 12' },
+                { day: 'Thu', date: 'Nov 13', isTarget: true },
+                { day: 'Fri', date: 'Nov 14' }
+              ].map((col) => (
+                <div
+                  key={col.day}
+                  className={`p-3 rounded-xl border flex flex-col justify-between min-h-[220px] ${
+                    col.isTarget
+                      ? 'bg-[#FEFDE6] border-[#172D50]/30 shadow-2xs'
+                      : 'bg-[#FAF8DB]/40 border-[#E8E5BA]'
+                  }`}
+                >
+                  <div className="border-b border-[#E8E5BA] pb-2 mb-3">
+                    <span className="font-mono text-xs font-bold text-[#172D50] block">{col.day}</span>
+                    <span className="font-mono text-[10px] text-[#172D50]/60">{col.date}</span>
                   </div>
+
+                  <div className="space-y-2 flex-1">
+                    {col.isTarget ? (
+                      events.map(ev => (
+                        <div
+                          key={ev.id}
+                          className={`p-2 rounded text-[11px] font-mono leading-tight ${
+                            ev.color === 'cyan'
+                              ? 'bg-[#06b6d4] text-[#0f172a]'
+                              : ev.color === 'blue'
+                              ? 'bg-[#1d4ed8] text-white'
+                              : 'bg-[#10380B] text-white'
+                          }`}
+                        >
+                          <span className="font-semibold block truncate">{ev.title}</span>
+                          <span className="text-[9px] opacity-80">{ev.startTime}–{ev.endTime}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-[10px] font-mono text-[#172D50]/40 italic">Regular classes</span>
+                    )}
+                  </div>
+
+                  {col.isTarget && conflict.hasConflict && (
+                    <div className="mt-2 pt-2 border-t border-[#dc2626]/30 text-[10px] font-mono text-[#dc2626] font-semibold">
+                      ⚠ {conflict.overlapMinutes}m clash
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* 4. MONTH VIEW (November 2026 Grid)                           */}
+        {/* ============================================================ */}
+        {calendarView === 'month' && (
+          <div className="bg-[#FAF8DB]/90 border border-[#E8E5BA] rounded-2xl p-6 shadow-xs animate-fade-in">
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#E8E5BA]">
+              <span className="font-serif font-bold text-base text-[#172D50]">
+                November 2026
+              </span>
+              <div className="flex items-center gap-1 text-xs font-mono text-[#172D50]">
+                <button type="button" className="p-1 rounded hover:bg-[#FEFDE6]"><ChevronLeft className="w-4 h-4" /></button>
+                <span>Term Session 1</span>
+                <button type="button" className="p-1 rounded hover:bg-[#FEFDE6]"><ChevronRight className="w-4 h-4" /></button>
+              </div>
+            </div>
+
+            {/* Days of week header */}
+            <div className="grid grid-cols-7 gap-1 text-center font-mono text-[11px] text-[#172D50]/60 mb-2">
+              <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+            </div>
+
+            {/* Calendar month grid */}
+            <div className="grid grid-cols-7 gap-1.5 font-mono text-xs">
+              {/* Empty leading days for Nov 2026 starting on Sunday or preceding days */}
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={`empty-${i}`} className="h-16 p-1 rounded bg-[#FEFDE6]/30 border border-transparent text-[#172D50]/20 text-[10px]">
+                  {26 + i}
+                </div>
+              ))}
+
+              {/* Days 1 to 30 */}
+              {Array.from({ length: 30 }).map((_, i) => {
+                const dayNum = i + 1;
+                const isTargetDay = dayNum === 13;
+                const isNextDay = dayNum === 14;
+
+                return (
+                  <div
+                    key={`day-${dayNum}`}
+                    className={`h-16 p-1.5 rounded-lg border flex flex-col justify-between transition-colors ${
+                      isTargetDay
+                        ? 'bg-[#FEFDE6] border-[#172D50] shadow-xs'
+                        : isNextDay
+                        ? 'bg-[#FAF8DB] border-[#E8E5BA]'
+                        : 'bg-[#FEFDE6]/80 border-[#E8E5BA]/60 hover:bg-[#FAF8DB]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[11px] font-bold ${isTargetDay ? 'text-[#172D50]' : 'text-[#172D50]/70'}`}>
+                        {dayNum}
+                      </span>
+                      {isTargetDay && conflict.hasConflict && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#dc2626]"></span>
+                      )}
+                    </div>
+
+                    {isTargetDay && (
+                      <div className="space-y-0.5">
+                        <span className="block truncate text-[9px] px-1 rounded bg-[#06b6d4] text-[#0f172a] font-semibold">
+                          Meeting 9:30
+                        </span>
+                        <span className="block truncate text-[9px] px-1 rounded bg-[#1d4ed8] text-white font-semibold">
+                          Lecture 10:00
+                        </span>
+                      </div>
+                    )}
+
+                    {isNextDay && (
+                      <span className="block truncate text-[9px] px-1 rounded bg-[#10380B] text-white font-semibold">
+                        Microservices
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* INTERACTIVE MODALS / CONTROLS                                */}
+        {/* ============================================================ */}
+
+        {/* Add Event Modal Form */}
+        {activeMode === 'add' && (
+          <div className="mt-4 p-5 bg-[#FEFDE6] border border-[#172D50]/20 rounded-xl shadow-sm animate-fade-in font-mono text-xs">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E8E5BA]">
+              <span className="font-bold text-sm text-[#172D50]">Add Event to Timeline</span>
+              <button
+                type="button"
+                onClick={() => setActiveMode('idle')}
+                className="text-[#172D50]/60 hover:text-[#172D50] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {formError && (
+              <p className="mb-3 text-[#dc2626] font-semibold">{formError}</p>
+            )}
+
+            <form onSubmit={handleAddSubmit} className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-[#172D50]/70 mb-1">Title</label>
+                <input
+                  type="text"
+                  required
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden"
+                  placeholder="e.g. Project Review"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#172D50]/70 mb-1">Start Time</label>
+                <input
+                  type="time"
+                  required
+                  value={newStartTime}
+                  onChange={(e) => setNewStartTime(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#172D50]/70 mb-1">End Time</label>
+                <input
+                  type="time"
+                  required
+                  value={newEndTime}
+                  onChange={(e) => setNewEndTime(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] focus:outline-hidden"
+                />
+              </div>
+
+              <div className="sm:col-span-4 flex items-center justify-between pt-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[#172D50]/70">Style:</span>
+                  {(['forest', 'cyan', 'blue', 'amber'] as const).map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setNewColor(c)}
+                      className={`w-6 h-6 rounded-full cursor-pointer border ${
+                        c === 'cyan' ? 'bg-[#06b6d4]' : c === 'blue' ? 'bg-[#1d4ed8]' : c === 'amber' ? 'bg-[#f59e0b]' : 'bg-[#10380B]'
+                      } ${newColor === c ? 'ring-2 ring-[#172D50]' : ''}`}
+                    />
+                  ))}
                 </div>
 
-                <div className="flex items-center gap-2 pt-2 sm:pt-0">
-                  {events.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteEvent(currentSelectedEvent.id)}
-                      className="p-1.5 rounded text-[#dc2626] hover:bg-[#FFF3E0]"
-                      title="Remove event"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setActiveMode('idle')}
-                    className="px-3 py-1 rounded bg-[#172D50] text-[#FEFDE6] inline-flex items-center gap-1"
+                    className="px-3 py-1.5 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] cursor-pointer"
                   >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Done</span>
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 rounded bg-[#172D50] text-[#FEFDE6] font-semibold cursor-pointer shadow-xs"
+                  >
+                    Add Event
                   </button>
                 </div>
               </div>
-            )}
+            </form>
           </div>
-        </div>
+        )}
+
+        {/* Reschedule Controls */}
+        {activeMode === 'reschedule' && selectedEvent && (
+          <div className="mt-4 p-5 bg-[#FEFDE6] border border-[#172D50]/20 rounded-xl shadow-sm animate-fade-in font-mono text-xs">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E8E5BA]">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-[#172D50]" />
+                <span className="font-bold text-sm text-[#172D50]">
+                  Reschedule: {selectedEvent.title} ({selectedEvent.startTime}–{selectedEvent.endTime})
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveMode('idle')}
+                className="text-[#172D50]/60 hover:text-[#172D50] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[#172D50]/70">Select Target:</span>
+                <select
+                  value={selectedEventId}
+                  onChange={(e) => setSelectedEventId(e.target.value)}
+                  className="px-2.5 py-1.5 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] font-semibold"
+                >
+                  {events.map(ev => (
+                    <option key={ev.id} value={ev.id}>
+                      {ev.title} ({ev.startTime}–{ev.endTime})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Incremental Shift Controls */}
+              <div className="flex items-center gap-2">
+                <span className="text-[#172D50]/70">Shift:</span>
+                <button
+                  type="button"
+                  onClick={() => handleShiftSelected(-15)}
+                  className="px-2.5 py-1 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] hover:bg-[#F2EE98]/40 cursor-pointer"
+                >
+                  -15m
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShiftSelected(15)}
+                  className="px-2.5 py-1 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] hover:bg-[#F2EE98]/40 cursor-pointer"
+                >
+                  +15m
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShiftSelected(30)}
+                  className="px-2.5 py-1 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50] hover:bg-[#F2EE98]/40 cursor-pointer"
+                >
+                  +30m
+                </button>
+              </div>
+
+              {/* Delete event option */}
+              <button
+                type="button"
+                onClick={() => handleDeleteSelected(selectedEvent.id)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-[#FFF0F0] border border-[#FCA5A5] text-[#dc2626] hover:bg-[#FEE2E2] cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
-    </div>
+    </section>
   );
 };

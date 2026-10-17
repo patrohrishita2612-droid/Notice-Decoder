@@ -1,13 +1,58 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { TimelineCalendar, CalendarEvent, INITIAL_CALENDAR_EVENTS } from './TimelineCalendar';
 import { NoticeProcessingSteps } from './NoticeProcessingSteps';
 import { 
   Sparkles, LogOut, FileText, Calendar, 
-  AlertTriangle, CheckCircle2, Download, Clock, MapPin
+  AlertTriangle, CheckCircle2, Download, Clock, MapPin, 
+  Wifi, WifiOff, RefreshCw, CheckSquare, BookOpen
 } from 'lucide-react';
 import { downloadNoticeIcs } from '../utils/icsExport';
 import { ExtractedNotice } from '../types';
+
+interface PersonalDeadline {
+  id: string;
+  title: string;
+  dueDate: string;
+  dueTime: string;
+  action: string;
+  completed: boolean;
+  priority: 'high' | 'medium' | 'normal';
+  sourceNotice?: string;
+}
+
+const INITIAL_DEADLINES: PersonalDeadline[] = [
+  {
+    id: 'dl-1',
+    title: 'Certified Practical Record Books Submission',
+    dueDate: '13 November 2026',
+    dueTime: '12:00 Noon',
+    action: 'Submit certified practical record books to department office for CS-302 CSA.',
+    completed: false,
+    priority: 'high',
+    sourceNotice: 'Internal Test 2 (CSA)'
+  },
+  {
+    id: 'dl-2',
+    title: 'Pre-registration for Microservices Workshop',
+    dueDate: '13 November 2026',
+    dueTime: '05:00 PM',
+    action: 'Complete registration link on student portal before Dr. Ramanujan guest lecture.',
+    completed: true,
+    priority: 'medium',
+    sourceNotice: 'Guest Lecture: Microservices'
+  },
+  {
+    id: 'dl-3',
+    title: 'Capstone Phase 1 Slides & GitHub Repository Upload',
+    dueDate: '14 November 2026',
+    dueTime: '09:00 AM',
+    action: 'Upload presentation slides and repository links for project evaluation.',
+    completed: false,
+    priority: 'high',
+    sourceNotice: 'Project Phase 1 Review'
+  }
+];
 
 const TEMPLATE_NOTICES = [
   {
@@ -24,29 +69,94 @@ const TEMPLATE_NOTICES = [
   }
 ];
 
-export const ProtectedWorkspace: React.FC = () => {
-  const { user, logout } = useAuth();
+interface ProtectedWorkspaceProps {
+  initialTab?: 'calendar' | 'notices' | 'deadlines' | 'timetable';
+}
 
-  // Storage key scoped to user
-  const storageKey = `notice_decoder_events_${user?.id || 'guest'}`;
+export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({ 
+  initialTab = 'calendar' 
+}) => {
+  const { 
+    user, logout, isOnline, pendingSyncCount, 
+    queueOfflineAction, syncOfflineQueue, getUserStorageKey 
+  } = useAuth();
 
-  // Calendar events state
+  // Active Workspace Tab
+  const [activeTab, setActiveTab] = useState<'calendar' | 'notices' | 'deadlines' | 'timetable'>(initialTab);
+
+  // Synchronize active tab with URL hash
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash.replace('#/', '').toLowerCase();
+      if (['calendar', 'notices', 'deadlines', 'timetable'].includes(hash)) {
+        setActiveTab(hash as any);
+      }
+    };
+
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+
+  const handleTabChange = (tab: 'calendar' | 'notices' | 'deadlines' | 'timetable') => {
+    setActiveTab(tab);
+    window.location.hash = `#/${tab}`;
+  };
+
+  // Storage key scoped to authenticated user
+  const eventsStorageKey = getUserStorageKey('notice_decoder_events');
+  const deadlinesStorageKey = getUserStorageKey('notice_decoder_deadlines');
+
+  // Calendar events state (user-scoped and offline cached)
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() => {
     try {
-      const saved = localStorage.getItem(storageKey);
+      const saved = localStorage.getItem(eventsStorageKey);
       return saved ? JSON.parse(saved) : INITIAL_CALENDAR_EVENTS;
     } catch {
       return INITIAL_CALENDAR_EVENTS;
     }
   });
 
-  // Save to localStorage on change
+  // Personal deadlines state (user-scoped and offline cached)
+  const [deadlines, setDeadlines] = useState<PersonalDeadline[]>(() => {
+    try {
+      const saved = localStorage.getItem(deadlinesStorageKey);
+      return saved ? JSON.parse(saved) : INITIAL_DEADLINES;
+    } catch {
+      return INITIAL_DEADLINES;
+    }
+  });
+
+  // Save calendar changes
   const handleCalendarChange = (updated: CalendarEvent[]) => {
     setCalendarEvents(updated);
     try {
-      localStorage.setItem(storageKey, JSON.stringify(updated));
+      localStorage.setItem(eventsStorageKey, JSON.stringify(updated));
+      if (!isOnline) {
+        queueOfflineAction({
+          action: 'update_event',
+          payload: updated
+        });
+      }
     } catch {
       // Storage quota or error
+    }
+  };
+
+  // Toggle deadline completion
+  const handleToggleDeadline = (id: string) => {
+    const updated = deadlines.map(d => d.id === id ? { ...d, completed: !d.completed } : d);
+    setDeadlines(updated);
+    try {
+      localStorage.setItem(deadlinesStorageKey, JSON.stringify(updated));
+      if (!isOnline) {
+        queueOfflineAction({
+          action: 'update_event',
+          payload: updated
+        });
+      }
+    } catch {
+      // Storage error
     }
   };
 
@@ -124,7 +234,6 @@ export const ProtectedWorkspace: React.FC = () => {
       category = 'Academic';
       urgency = 'high';
     } else {
-      // Generic fallback with detected times if available
       const timeMatch = noticeText.match(/(\d{1,2}:\d{2})\s*(?:AM|PM)?\s*(?:to|–|-)\s*(\d{1,2}:\d{2})\s*(?:AM|PM)?/i);
       if (timeMatch) {
         startTime = timeMatch[1];
@@ -156,13 +265,33 @@ export const ProtectedWorkspace: React.FC = () => {
     setIsDecoding(false);
     setSuccessToast('Notice decoded into structured academic schema.');
     setTimeout(() => setSuccessToast(''), 3500);
+
+    // If new deadline detected, add to personal deadlines
+    if (deadline && deadlineAction) {
+      const newDl: PersonalDeadline = {
+        id: `dl-${Date.now()}`,
+        title: `${title} Action Requirement`,
+        dueDate: '13 November 2026',
+        dueTime: deadline,
+        action: deadlineAction,
+        completed: false,
+        priority: urgency,
+        sourceNotice: title
+      };
+      const updatedDl = [newDl, ...deadlines];
+      setDeadlines(updatedDl);
+      try {
+        localStorage.setItem(deadlinesStorageKey, JSON.stringify(updatedDl));
+      } catch {
+        // storage err
+      }
+    }
   };
 
   // Automatic Calendar Integration Flow
   const handleAddToCalendar = () => {
     if (!extractedDraft) return;
 
-    // Check for duplicate in existing calendar
     const isDuplicate = calendarEvents.some(
       ev => ev.title.toLowerCase() === extractedDraft.title.toLowerCase()
     );
@@ -179,14 +308,18 @@ export const ProtectedWorkspace: React.FC = () => {
       startTime: extractedDraft.startTime,
       endTime: extractedDraft.endTime,
       color: 'amber',
+      date: '2026-11-13',
       sourceNoticeTitle: extractedDraft.title
     };
 
     const updated = [...calendarEvents, newCalendarEvent];
     handleCalendarChange(updated);
 
-    setSuccessToast(`Added "${extractedDraft.title}" directly to timeline! Conflict detection evaluated.`);
-    setTimeout(() => setSuccessToast(''), 4000);
+    setSuccessToast(`Added "${extractedDraft.title}" directly to calendar! Switched to Calendar view.`);
+    setTimeout(() => {
+      setSuccessToast('');
+      handleTabChange('calendar');
+    }, 1500);
   };
 
   return (
@@ -209,9 +342,33 @@ export const ProtectedWorkspace: React.FC = () => {
             </div>
           </div>
 
-          {/* User Profile Info & Sign Out */}
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex flex-col text-right">
+          {/* Network & Sync Status + User Profile Info & Sign Out */}
+          <div className="flex items-center gap-3 md:gap-5">
+            {/* Live Online / Offline Indicator Badge */}
+            <div className="hidden sm:flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border ${
+                isOnline 
+                  ? 'bg-[#F0FDF4] border-[#86EFAC] text-[#15803D]' 
+                  : 'bg-[#FFF8E1] border-[#FFE082] text-[#E65100]'
+              }`}>
+                {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                <span>{isOnline ? 'Online' : 'Offline Cache'}</span>
+              </span>
+
+              {pendingSyncCount > 0 && (
+                <button
+                  type="button"
+                  onClick={syncOfflineQueue}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-[#FEFDE6] border border-[#E8E5BA] text-[#E65100] hover:bg-[#FAF8DB] cursor-pointer"
+                  title="Click to sync offline changes"
+                >
+                  <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                  <span>{pendingSyncCount} pending</span>
+                </button>
+              )}
+            </div>
+
+            <div className="hidden md:flex flex-col text-right">
               <span className="font-mono text-xs font-semibold text-[#172D50]">{user?.name}</span>
               <span className="font-mono text-[10px] text-[#172D50]/60">{user?.email}</span>
             </div>
@@ -227,7 +384,70 @@ export const ProtectedWorkspace: React.FC = () => {
         </div>
       </header>
 
-      {/* 2. MAIN WORKSPACE CONTAINER */}
+      {/* 2. SUB-NAVIGATION TABS */}
+      <div className="bg-[#FAF8DB]/60 border-b border-[#E8E5BA] px-6">
+        <div className="max-w-6xl mx-auto flex items-center gap-1 sm:gap-2 overflow-x-auto py-2">
+          <button
+            type="button"
+            onClick={() => handleTabChange('calendar')}
+            className={`px-3.5 py-2 rounded-lg text-xs font-mono font-medium flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'calendar'
+                ? 'bg-[#172D50] text-[#FEFDE6] shadow-xs'
+                : 'text-[#172D50]/70 hover:bg-[#FAF8DB] hover:text-[#172D50]'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Academic Calendar</span>
+            <span className="px-1.5 py-0.2 rounded text-[10px] bg-black/20 text-white/90">
+              {calendarEvents.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleTabChange('notices')}
+            className={`px-3.5 py-2 rounded-lg text-xs font-mono font-medium flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'notices'
+                ? 'bg-[#172D50] text-[#FEFDE6] shadow-xs'
+                : 'text-[#172D50]/70 hover:bg-[#FAF8DB] hover:text-[#172D50]'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Notice Decoder</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleTabChange('deadlines')}
+            className={`px-3.5 py-2 rounded-lg text-xs font-mono font-medium flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'deadlines'
+                ? 'bg-[#172D50] text-[#FEFDE6] shadow-xs'
+                : 'text-[#172D50]/70 hover:bg-[#FAF8DB] hover:text-[#172D50]'
+            }`}
+          >
+            <CheckSquare className="w-3.5 h-3.5" />
+            <span>Personal Deadlines</span>
+            <span className="px-1.5 py-0.2 rounded text-[10px] bg-[#E65100]/20 text-[#E65100] font-bold">
+              {deadlines.filter(d => !d.completed).length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleTabChange('timetable')}
+            className={`px-3.5 py-2 rounded-lg text-xs font-mono font-medium flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'timetable'
+                ? 'bg-[#172D50] text-[#FEFDE6] shadow-xs'
+                : 'text-[#172D50]/70 hover:bg-[#FAF8DB] hover:text-[#172D50]'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Course Timetable</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 3. MAIN WORKSPACE CONTAINER */}
       <main className="max-w-6xl mx-auto px-6 py-8 md:py-12">
         
         {/* Toast Alerts */}
@@ -245,236 +465,384 @@ export const ProtectedWorkspace: React.FC = () => {
           </div>
         )}
 
-        {/* Section Header */}
-        <div className="mb-8">
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono text-[#10380B]">
-              <span className="w-2 h-2 rounded-full bg-[#10380B] animate-pulse"></span>
-              Live Pipeline Active
-            </span>
-            <span className="text-xs font-mono text-[#172D50]/60">Academic Notice Intelligence</span>
-          </div>
-          <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#172D50]">
-            Notice Ingestion & Schedule Synchronizer
-          </h1>
-          <p className="mt-1 text-sm text-[#172D50]/70">
-            Paste an unstructured academic circular to extract dates, identify buried deadlines, and check timetable overlaps.
-          </p>
-        </div>
+        {/* ============================================================ */}
+        {/* TAB 1: ACADEMIC CALENDAR (Timeline, Day, Week, Month)         */}
+        {/* ============================================================ */}
+        {activeTab === 'calendar' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono tracking-wider text-[#10380B] uppercase mb-2">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Private Academic Calendar</span>
+                </div>
+                <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#172D50]">
+                  Active Schedule & Conflict Visualizer
+                </h1>
+                <p className="text-xs text-[#172D50]/70 font-sans mt-0.5">
+                  Evaluates complete duration overlaps across meetings, lectures, and newly decoded notices in Timeline, Day, Week, and Month views.
+                </p>
+              </div>
 
-        {/* Top Grid: Notice Ingestion on Left, Extraction / Processing on Right */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start mb-12">
-          
-          {/* Left Column: Input Box & Sample Notice Selectors */}
-          <div className="lg:col-span-6 bg-[#FAF8DB]/60 border border-[#E8E5BA] rounded-2xl p-6 shadow-xs">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#172D50]/80 flex items-center gap-1.5">
-                <FileText className="w-4 h-4 text-[#172D50]" />
-                Unstructured Notice Text
-              </span>
-              <span className="text-[11px] font-mono text-[#172D50]/50">
-                Supports circulars & notifications
-              </span>
-            </div>
-
-            {/* Quick Template Buttons */}
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-mono text-[#172D50]/60">Load specimen:</span>
-              {TEMPLATE_NOTICES.map((tmpl, idx) => (
+              <div className="flex items-center gap-2">
                 <button
-                  key={idx}
                   type="button"
-                  onClick={() => {
-                    setNoticeText(tmpl.text);
-                    setExtractedDraft(null);
-                  }}
-                  className="px-2.5 py-1 rounded bg-[#FEFDE6] hover:bg-[#FAF8DB] border border-[#E8E5BA] text-[11px] font-mono text-[#172D50] transition-colors cursor-pointer"
+                  onClick={() => handleTabChange('notices')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-colors text-xs font-mono cursor-pointer"
                 >
-                  {tmpl.name}
+                  <Sparkles className="w-3.5 h-3.5 text-[#F2EE98]" />
+                  <span>Decode Notice to Add</span>
                 </button>
-              ))}
+              </div>
             </div>
 
-            {/* Text Area */}
-            <textarea
-              rows={9}
-              value={noticeText}
-              onChange={(e) => setNoticeText(e.target.value)}
-              placeholder="Paste college circular, exam schedule, guest lecture announcement, or club notice..."
-              className="w-full p-4 rounded-xl bg-[#FEFDE6] border border-[#E8E5BA] font-mono text-xs text-[#172D50] placeholder-[#172D50]/40 focus:outline-hidden focus:border-[#172D50] focus:ring-1 focus:ring-[#172D50] transition-all resize-y leading-relaxed"
+            {/* Complete Built-in Calendar Component */}
+            <TimelineCalendar
+              events={calendarEvents}
+              onEventsChange={handleCalendarChange}
             />
-
-            {/* Action Bar */}
-            <div className="mt-4 flex items-center justify-between gap-4">
-              <span className="text-[11px] font-mono text-[#172D50]/60">
-                {noticeText.trim().split(/\s+/).filter(Boolean).length} words
-              </span>
-
-              <button
-                type="button"
-                onClick={handleStartDecoding}
-                disabled={isDecoding || !noticeText.trim()}
-                className="px-5 py-2.5 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-all font-medium text-xs font-mono flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[#F2EE98]" />
-                <span>{isDecoding ? 'Decoding Circular...' : 'Decode Notice'}</span>
-              </button>
-            </div>
           </div>
+        )}
 
-          {/* Right Column: Processing Animation OR Extracted Review Card */}
-          <div className="lg:col-span-6">
-            {isDecoding ? (
-              <NoticeProcessingSteps onComplete={handleProcessingComplete} />
-            ) : extractedDraft ? (
-              <div className="bg-[#FEFDE6] border border-[#172D50]/20 rounded-2xl p-6 shadow-xs animate-fade-in">
-                {/* Draft Header */}
-                <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#E8E5BA]">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#10380B]"></span>
-                    <span className="text-xs font-mono uppercase tracking-wider text-[#10380B] font-semibold">
-                      Extracted Notice Intelligence
-                    </span>
-                  </div>
-                  <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50]/80">
-                    {extractedDraft.category}
-                  </span>
-                </div>
-
-                {/* Event Title & Summary */}
-                <h3 className="text-xl font-serif font-bold text-[#172D50] mb-2">
-                  {extractedDraft.title}
-                </h3>
-                <p className="text-xs text-[#172D50]/80 font-sans leading-relaxed mb-4">
-                  {extractedDraft.summary}
-                </p>
-
-                {/* Key Metrics */}
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="p-3 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA]">
-                    <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase text-[#172D50]/60 mb-1">
-                      <Clock className="w-3 h-3 text-[#172D50]" />
-                      <span>Extracted Hours</span>
-                    </div>
-                    <span className="font-mono text-xs font-bold text-[#172D50] block">
-                      {extractedDraft.startTime} – {extractedDraft.endTime}
-                    </span>
-                    <span className="font-mono text-[10px] text-[#172D50]/60">
-                      {extractedDraft.date}
-                    </span>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA]">
-                    <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase text-[#172D50]/60 mb-1">
-                      <MapPin className="w-3 h-3 text-[#172D50]" />
-                      <span>Venue / Location</span>
-                    </div>
-                    <span className="font-mono text-xs font-bold text-[#172D50] block truncate">
-                      {extractedDraft.venue}
-                    </span>
-                    <span className="font-mono text-[10px] text-[#172D50]/60">
-                      Offline Mode
-                    </span>
-                  </div>
-                </div>
-
-                {/* Buried Deadline Highlight */}
-                {extractedDraft.deadline && (
-                  <div className="mb-4 p-3.5 rounded-xl bg-[#FFF8E1] border border-[#FFE082] text-xs">
-                    <div className="flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#E65100] mb-1">
-                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                      <span>Buried Deadline Detected: {extractedDraft.deadline}</span>
-                    </div>
-                    <p className="font-sans text-[11px] text-[#172D50]/80">
-                      {extractedDraft.deadlineAction}
-                    </p>
-                  </div>
-                )}
-
-                {/* Flagged Uncertainties */}
-                {extractedDraft.uncertainFlags && extractedDraft.uncertainFlags.length > 0 && (
-                  <div className="mb-5 space-y-2">
-                    {extractedDraft.uncertainFlags.map((flag, idx) => (
-                      <div key={idx} className="p-3 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA] text-xs">
-                        <div className="font-mono text-[11px] font-semibold text-[#172D50] flex items-center justify-between">
-                          <span>Audit Flag: {flag.field}</span>
-                          <span className="text-[10px] text-[#E65100] uppercase font-bold">Needs Verification</span>
-                        </div>
-                        <p className="text-[11px] text-[#172D50]/70 mt-1 font-sans">{flag.reason}</p>
-                        <p className="text-[11px] text-[#10380B] mt-1 font-mono font-medium">Recommendation: {flag.suggestion}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Actions: Add to Live Calendar & Export ICS */}
-                <div className="pt-3 border-t border-[#E8E5BA] flex flex-wrap items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={handleAddToCalendar}
-                    className="px-4 py-2 rounded-lg bg-[#10380B] text-[#FEFDE6] hover:bg-[#185311] transition-all font-mono text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-xs"
-                  >
-                    <Calendar className="w-3.5 h-3.5 text-[#F2EE98]" />
-                    <span>Sync with Timeline Calendar</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      downloadNoticeIcs(extractedDraft);
-                    }}
-                    className="px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] hover:bg-[#F2EE98]/40 text-[#172D50] transition-colors font-mono text-xs font-medium flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Export .ics</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="h-full min-h-[320px] bg-[#FAF8DB]/30 border border-dashed border-[#E8E5BA] rounded-2xl p-8 flex flex-col items-center justify-center text-center">
-                <div className="w-12 h-12 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50]/40 flex items-center justify-center mb-3">
-                  <Sparkles className="w-6 h-6" />
-                </div>
-                <h4 className="font-serif font-bold text-base text-[#172D50]">
-                  Ready to Extract Notice Intelligence
-                </h4>
-                <p className="mt-1 text-xs text-[#172D50]/60 max-w-sm font-sans leading-relaxed">
-                  Select a specimen above or paste a circular, then click &ldquo;Decode Notice&rdquo; to initiate the 4-step parsing pipeline.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 3. WORKING TIMELINE CALENDAR AS PRIMARY CALENDAR */}
-        <div id="calendar" className="mt-12 pt-8 border-t border-[#E8E5BA]">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        {/* ============================================================ */}
+        {/* TAB 2: NOTICE DECODER (Animated Steps & Extraction)          */}
+        {/* ============================================================ */}
+        {activeTab === 'notices' && (
+          <div className="space-y-8 animate-fade-in">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono tracking-wider text-[#10380B] uppercase mb-2">
-                <Calendar className="w-3.5 h-3.5" />
-                <span>Primary Calendar Engine</span>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono text-[#10380B]">
+                  <span className="w-2 h-2 rounded-full bg-[#10380B] animate-pulse"></span>
+                  Grounded Extraction Engine
+                </span>
+                <span className="text-xs font-mono text-[#172D50]/60">Academic Notice Intelligence</span>
               </div>
-              <h2 className="text-2xl font-serif font-bold text-[#172D50]">
-                Active Schedule & Conflict Visualizer
-              </h2>
-              <p className="text-xs text-[#172D50]/70 font-sans mt-0.5">
-                Evaluates complete duration overlaps across meetings, lectures, and newly decoded notices.
+              <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#172D50]">
+                Notice Ingestion & Schedule Synchronizer
+              </h1>
+              <p className="mt-1 text-sm text-[#172D50]/70">
+                Paste an unstructured academic circular to extract dates, identify buried deadlines, and check timetable overlaps.
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono px-2.5 py-1 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50]">
-                {calendarEvents.length} Active Events
-              </span>
+            {/* Notice Ingestion Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              
+              {/* Left Column: Input Box & Sample Notice Selectors */}
+              <div className="lg:col-span-6 bg-[#FAF8DB]/60 border border-[#E8E5BA] rounded-2xl p-6 shadow-xs">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#172D50]/80 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-[#172D50]" />
+                    Unstructured Notice Text
+                  </span>
+                  <span className="text-[11px] font-mono text-[#172D50]/50">
+                    Supports circulars & PDFs
+                  </span>
+                </div>
+
+                {/* Quick Template Buttons */}
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-mono text-[#172D50]/60">Load specimen:</span>
+                  {TEMPLATE_NOTICES.map((tmpl, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setNoticeText(tmpl.text);
+                        setExtractedDraft(null);
+                      }}
+                      className="px-2.5 py-1 rounded bg-[#FEFDE6] hover:bg-[#FAF8DB] border border-[#E8E5BA] text-[11px] font-mono text-[#172D50] transition-colors cursor-pointer"
+                    >
+                      {tmpl.name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Text Area */}
+                <textarea
+                  rows={9}
+                  value={noticeText}
+                  onChange={(e) => setNoticeText(e.target.value)}
+                  placeholder="Paste college circular, exam schedule, guest lecture announcement, or club notice..."
+                  className="w-full p-4 rounded-xl bg-[#FEFDE6] border border-[#E8E5BA] font-mono text-xs text-[#172D50] placeholder-[#172D50]/40 focus:outline-hidden focus:border-[#172D50] focus:ring-1 focus:ring-[#172D50] transition-all resize-y leading-relaxed"
+                />
+
+                {/* Action Bar */}
+                <div className="mt-4 flex items-center justify-between gap-4">
+                  <span className="text-[11px] font-mono text-[#172D50]/60">
+                    {noticeText.trim().split(/\s+/).filter(Boolean).length} words
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={handleStartDecoding}
+                    disabled={isDecoding || !noticeText.trim()}
+                    className="px-5 py-2.5 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-all font-medium text-xs font-mono flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-[#F2EE98]" />
+                    <span>{isDecoding ? 'Decoding Circular...' : 'Decode Notice'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Column: Processing Animation OR Extracted Review Card */}
+              <div className="lg:col-span-6">
+                {isDecoding ? (
+                  <NoticeProcessingSteps onComplete={handleProcessingComplete} />
+                ) : extractedDraft ? (
+                  <div className="bg-[#FEFDE6] border border-[#172D50]/20 rounded-2xl p-6 shadow-xs animate-fade-in">
+                    {/* Draft Header */}
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#E8E5BA]">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#10380B]"></span>
+                        <span className="text-xs font-mono uppercase tracking-wider text-[#10380B] font-semibold">
+                          Extracted Notice Intelligence
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50]/80">
+                        {extractedDraft.category}
+                      </span>
+                    </div>
+
+                    {/* Event Title & Summary */}
+                    <h3 className="text-xl font-serif font-bold text-[#172D50] mb-2">
+                      {extractedDraft.title}
+                    </h3>
+                    <p className="text-xs text-[#172D50]/80 font-sans leading-relaxed mb-4">
+                      {extractedDraft.summary}
+                    </p>
+
+                    {/* Key Metrics */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="p-3 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA]">
+                        <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase text-[#172D50]/60 mb-1">
+                          <Clock className="w-3 h-3 text-[#172D50]" />
+                          <span>Extracted Hours</span>
+                        </div>
+                        <span className="font-mono text-xs font-bold text-[#172D50] block">
+                          {extractedDraft.startTime} – {extractedDraft.endTime}
+                        </span>
+                        <span className="font-mono text-[10px] text-[#172D50]/60">
+                          {extractedDraft.date}
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA]">
+                        <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase text-[#172D50]/60 mb-1">
+                          <MapPin className="w-3 h-3 text-[#172D50]" />
+                          <span>Venue / Location</span>
+                        </div>
+                        <span className="font-mono text-xs font-bold text-[#172D50] block truncate">
+                          {extractedDraft.venue}
+                        </span>
+                        <span className="font-mono text-[10px] text-[#172D50]/60">
+                          Offline Mode
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Buried Deadline Highlight */}
+                    {extractedDraft.deadline && (
+                      <div className="mb-4 p-3.5 rounded-xl bg-[#FFF8E1] border border-[#FFE082] text-xs">
+                        <div className="flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#E65100] mb-1">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                          <span>Buried Deadline Detected: {extractedDraft.deadline}</span>
+                        </div>
+                        <p className="font-sans text-[11px] text-[#172D50]/80">
+                          {extractedDraft.deadlineAction}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Flagged Uncertainties */}
+                    {extractedDraft.uncertainFlags && extractedDraft.uncertainFlags.length > 0 && (
+                      <div className="mb-5 space-y-2">
+                        {extractedDraft.uncertainFlags.map((flag, idx) => (
+                          <div key={idx} className="p-3 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA] text-xs">
+                            <div className="font-mono text-[11px] font-semibold text-[#172D50] flex items-center justify-between">
+                              <span>Audit Flag: {flag.field}</span>
+                              <span className="text-[10px] text-[#E65100] uppercase font-bold">Needs Verification</span>
+                            </div>
+                            <p className="text-[11px] text-[#172D50]/70 mt-1 font-sans">{flag.reason}</p>
+                            <p className="text-[11px] text-[#10380B] mt-1 font-mono font-medium">Recommendation: {flag.suggestion}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Actions: Add to Live Calendar & Export ICS */}
+                    <div className="pt-3 border-t border-[#E8E5BA] flex flex-wrap items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={handleAddToCalendar}
+                        className="px-4 py-2 rounded-lg bg-[#10380B] text-[#FEFDE6] hover:bg-[#185311] transition-all font-mono text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-xs"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-[#F2EE98]" />
+                        <span>Sync with Calendar</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          downloadNoticeIcs(extractedDraft);
+                        }}
+                        className="px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] hover:bg-[#F2EE98]/40 text-[#172D50] transition-colors font-mono text-xs font-medium flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Export .ics</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full min-h-[320px] bg-[#FAF8DB]/30 border border-dashed border-[#E8E5BA] rounded-2xl p-8 flex flex-col items-center justify-center text-center">
+                    <div className="w-12 h-12 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50]/40 flex items-center justify-center mb-3">
+                      <Sparkles className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-serif font-bold text-base text-[#172D50]">
+                      Ready to Extract Notice Intelligence
+                    </h4>
+                    <p className="mt-1 text-xs text-[#172D50]/60 max-w-sm font-sans leading-relaxed">
+                      Select a circular specimen above or paste your notice text, then click &ldquo;Decode Notice&rdquo; to initiate the 4-step parsing pipeline.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Render the Primary Working Timeline Calendar */}
-          <TimelineCalendar
-            events={calendarEvents}
-            onEventsChange={handleCalendarChange}
-          />
-        </div>
+        {/* ============================================================ */}
+        {/* TAB 3: PERSONAL DEADLINES & ACTION REMINDERS                 */}
+        {/* ============================================================ */}
+        {activeTab === 'deadlines' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono tracking-wider text-[#E65100] uppercase mb-2">
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  <span>Personal Academic Deadlines</span>
+                </div>
+                <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#172D50]">
+                  Buried Deadlines & Submission Tracker
+                </h1>
+                <p className="text-xs text-[#172D50]/70 font-sans mt-0.5">
+                  Deadlines extracted directly from parsed circulars and notifications. Never miss a record submission or form deadline.
+                </p>
+              </div>
+
+              <span className="text-xs font-mono px-3 py-1.5 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50]">
+                {deadlines.filter(d => !d.completed).length} Pending · {deadlines.filter(d => d.completed).length} Completed
+              </span>
+            </div>
+
+            <div className="space-y-3 font-mono text-xs">
+              {deadlines.map(item => (
+                <div
+                  key={item.id}
+                  onClick={() => handleToggleDeadline(item.id)}
+                  className={`p-4 rounded-xl border flex items-start justify-between gap-4 transition-all cursor-pointer ${
+                    item.completed
+                      ? 'bg-[#FAF8DB]/40 border-[#E8E5BA] opacity-60'
+                      : 'bg-[#FEFDE6] border-[#172D50]/20 hover:border-[#172D50] shadow-xs'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={item.completed}
+                      onChange={() => handleToggleDeadline(item.id)}
+                      className="mt-1 rounded border-[#E8E5BA] text-[#172D50] focus:ring-0 cursor-pointer"
+                    />
+                    <div>
+                      <span className={`font-serif font-bold text-sm block ${
+                        item.completed ? 'line-through text-[#172D50]/60' : 'text-[#172D50]'
+                      }`}>
+                        {item.title}
+                      </span>
+                      <p className="font-sans text-xs text-[#172D50]/80 mt-1">
+                        {item.action}
+                      </p>
+                      {item.sourceNotice && (
+                        <span className="inline-block mt-2 text-[10px] text-[#172D50]/60 px-2 py-0.5 rounded bg-[#FAF8DB] border border-[#E8E5BA]">
+                          Source: {item.sourceNotice}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <span className="font-bold text-[#E65100] block text-xs">
+                      {item.dueTime}
+                    </span>
+                    <span className="text-[10px] text-[#172D50]/60 block">
+                      {item.dueDate}
+                    </span>
+                    <span className={`inline-block mt-1 text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                      item.priority === 'high'
+                        ? 'bg-[#FFF0F0] text-[#dc2626] border border-[#FCA5A5]'
+                        : 'bg-[#FAF8DB] text-[#10380B] border border-[#E8E5BA]'
+                    }`}>
+                      {item.priority} priority
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* TAB 4: COURSE TIMETABLE & CLASH DETECTOR                    */}
+        {/* ============================================================ */}
+        {activeTab === 'timetable' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono tracking-wider text-[#10380B] uppercase mb-2">
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Enrolled Course Timetable</span>
+                </div>
+                <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#172D50]">
+                  Weekly Lectures & Clash Check
+                </h1>
+                <p className="text-xs text-[#172D50]/70 font-sans mt-0.5">
+                  Your regular course lectures used to automatically detect timetable conflicts with new notices.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
+              {[
+                { code: 'CS-302', course: 'Computer System Architecture (CSA)', time: '10:00–11:00 AM', day: 'Wed, Thu', room: 'Room 204', faculty: 'Dr. S. Mehta' },
+                { code: 'CS-304', course: 'Database Management Systems (DBMS)', time: '11:15–12:15 PM', day: 'Mon, Tue', room: 'Hall 102', faculty: 'Prof. K. Iyer' },
+                { code: 'CS-306', course: 'Operating Systems & Concurrency', time: '02:00–03:00 PM', day: 'Mon, Wed', room: 'Room 301', faculty: 'Dr. V. Sharma' },
+                { code: 'CS-308', course: 'Design & Analysis of Algorithms', time: '03:15–04:15 PM', day: 'Tue, Thu', room: 'Hall 205', faculty: 'Prof. N. Patel' }
+              ].map(course => (
+                <div key={course.code} className="p-5 rounded-2xl bg-[#FAF8DB]/70 border border-[#E8E5BA] shadow-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-[#172D50] text-sm">{course.code}</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] bg-[#FEFDE6] border border-[#E8E5BA] text-[#10380B] font-semibold">
+                        {course.day}
+                      </span>
+                    </div>
+                    <span className="font-serif font-semibold text-sm text-[#172D50] block mb-2">
+                      {course.course}
+                    </span>
+                    <div className="flex items-center gap-3 text-[11px] text-[#172D50]/70">
+                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {course.time}</span>
+                      <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {course.room}</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-[#E8E5BA] flex items-center justify-between text-[11px] text-[#172D50]/60">
+                    <span>Instructor: {course.faculty}</span>
+                    <span className="text-[#10380B] font-semibold">Active Enrolled</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
       </main>
     </div>

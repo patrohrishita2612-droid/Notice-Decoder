@@ -7,11 +7,19 @@ import { TrustReliabilitySection } from './TrustReliabilitySection';
 import { Footer } from './Footer';
 import { 
   ArrowRight, Lock, Mail, Key, Check, AlertCircle, 
-  Eye, EyeOff, ShieldCheck, CheckCircle2 
+  Eye, EyeOff, ShieldCheck, WifiOff 
 } from 'lucide-react';
 
-export const PublicLanding: React.FC = () => {
-  const { login, register, resetPassword, oauthLogin } = useAuth();
+interface PublicLandingProps {
+  initialRedirectReason?: string;
+  onLoginSuccess?: (targetRoute?: string) => void;
+}
+
+export const PublicLanding: React.FC<PublicLandingProps> = ({ 
+  initialRedirectReason,
+  onLoginSuccess 
+}) => {
+  const { login, register, resetPassword, oauthLogin, isOnline, intendedDestination } = useAuth();
 
   // Mode: 'login' | 'register' | 'forgot'
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot'>('login');
@@ -40,6 +48,13 @@ export const PublicLanding: React.FC = () => {
     e.preventDefault();
     setErrorMessage('');
     setSuccessMessage('');
+
+    // Check offline status first: Never bypass login offline
+    if (!isOnline) {
+      setErrorMessage('Internet Connection Required: You are currently offline. An active network connection is required to authenticate your campus credentials. Authentication cannot be bypassed offline.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -47,6 +62,8 @@ export const PublicLanding: React.FC = () => {
         const res = await login(email, password, keepMeSignedIn);
         if (!res.success) {
           setErrorMessage(res.error || 'Failed to sign in.');
+        } else {
+          onLoginSuccess?.(res.destination || undefined);
         }
       } else if (authMode === 'register') {
         if (password !== confirmPassword) {
@@ -57,6 +74,8 @@ export const PublicLanding: React.FC = () => {
         const res = await register(name, email, password, keepMeSignedIn);
         if (!res.success) {
           setErrorMessage(res.error || 'Failed to create account.');
+        } else {
+          onLoginSuccess?.();
         }
       } else if (authMode === 'forgot') {
         const res = await resetPassword(email, password);
@@ -75,11 +94,17 @@ export const PublicLanding: React.FC = () => {
   };
 
   const handleOAuth = async (provider: 'google' | 'github') => {
+    if (!isOnline) {
+      setErrorMessage('Internet Connection Required: Campus SSO verification requires an active network connection.');
+      return;
+    }
     setIsSubmitting(true);
     setErrorMessage('');
     const res = await oauthLogin(provider);
     if (!res.success) {
       setErrorMessage(res.error || `Could not sign in with ${provider}`);
+    } else {
+      onLoginSuccess?.();
     }
     setIsSubmitting(false);
   };
@@ -95,8 +120,17 @@ export const PublicLanding: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#FEFDE6] text-[#172D50] selection:bg-[#F2EE98] selection:text-[#172D50] font-sans relative">
+      
       {/* 1. Signature Interaction: Live Document Scroll Progress Indicator */}
       <ScrollProgressIndicator />
+
+      {/* Offline Alert Banner if User is Disconnected */}
+      {!isOnline && (
+        <div className="bg-[#FFF8E1] border-b border-[#FFE082] px-6 py-2.5 text-xs font-mono text-[#E65100] flex items-center justify-center gap-2">
+          <WifiOff className="w-4 h-4 shrink-0" />
+          <span>Offline Notice: An internet connection is required to authenticate and verify campus credentials.</span>
+        </div>
+      )}
 
       {/* 2. Editorial Navigation Bar */}
       <header className="sticky top-0 z-30 w-full bg-[#FEFDE6]/90 backdrop-blur-md border-b border-[#E8E5BA]/70 transition-all">
@@ -120,13 +154,13 @@ export const PublicLanding: React.FC = () => {
           <nav className="flex items-center gap-4 md:gap-8">
             <div className="hidden md:flex items-center gap-6 text-sm font-medium text-[#172D50]/80">
               <a href="#how-it-works" className="hover:text-[#E65100] transition-colors">How It Works</a>
-              <a href="#safeguards" className="hover:text-[#E65100] transition-colors">Integrity Safeguards</a>
+              <a href="#safeguards" className="hover:text-[#E65100] transition-colors">Safeguards</a>
               <a href="#campus-auth-portal" className="hover:text-[#E65100] transition-colors">Access Portal</a>
             </div>
 
             <button
               onClick={scrollToAuth}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-all text-sm font-medium shadow-xs hover:shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-all text-sm font-medium shadow-xs hover:shadow-sm cursor-pointer"
             >
               <Lock className="w-3.5 h-3.5 text-[#F2EE98]" />
               <span>Sign In / Enter App</span>
@@ -136,7 +170,27 @@ export const PublicLanding: React.FC = () => {
         </div>
       </header>
 
-      {/* 3. Hero Section (Original Editorial Style) */}
+      {/* Route Interception Notice Banner (if user tried to access private URL) */}
+      {(initialRedirectReason || intendedDestination) && (
+        <div className="bg-[#FAF8DB] border-b border-[#E8E5BA] px-6 py-3">
+          <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 text-xs font-mono text-[#172D50]">
+            <div className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-[#E65100]" />
+              <span>
+                <strong>Authentication Required:</strong> {initialRedirectReason || 'The requested page contains private academic records and schedules. Please sign in below.'}
+              </span>
+            </div>
+            <button
+              onClick={scrollToAuth}
+              className="underline font-bold text-[#E65100] hover:text-[#172D50] cursor-pointer"
+            >
+              Go to Sign In
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Hero Section (Public Overview - NO fabricated decoded notices or calendars) */}
       <section className="relative pt-12 md:pt-20 pb-20 md:pb-28 px-6 md:px-12 bg-[#FEFDE6] overflow-hidden">
         <div className="max-w-6xl mx-auto">
           {/* Badging */}
@@ -162,9 +216,10 @@ export const PublicLanding: React.FC = () => {
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <button
                 onClick={scrollToAuth}
-                className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-all font-medium text-base shadow-sm hover:shadow"
+                className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-all font-medium text-base shadow-sm hover:shadow cursor-pointer"
               >
-                <span>Enter Protected Workspace</span>
+                <Lock className="w-4 h-4 text-[#F2EE98]" />
+                <span>Sign In to Access Workspace</span>
                 <ArrowRight className="w-4 h-4 text-[#F2EE98]" />
               </button>
 
@@ -172,90 +227,67 @@ export const PublicLanding: React.FC = () => {
                 href="#how-it-works"
                 className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg bg-[#FAF8DB] text-[#172D50] hover:bg-[#F2EE98]/40 border border-[#E8E5BA] transition-all font-medium text-base"
               >
-                <span>See How It Works</span>
+                <span>See Architecture</span>
               </a>
             </div>
           </div>
 
-          {/* Authentic Visual Specimen: Raw Notice transforming into Extracted Intelligence */}
+          {/* Conceptual Architecture Diagram (Strictly avoids fabricated decoded notices or working calendars) */}
           <div className="mt-14 pt-8 border-t border-[#E8E5BA]/60">
-            <div className="text-xs font-mono uppercase tracking-wider text-[#172D50]/60 mb-4 flex items-center justify-between">
-              <span>Visual Transformation Specimen</span>
-              <span className="text-[#E65100]">Authentic Circular Sample</span>
+            <div className="text-xs font-mono uppercase tracking-wider text-[#172D50]/60 mb-6 flex items-center justify-between">
+              <span>System Pipeline Overview</span>
+              <span className="text-[#10380B] font-semibold">Protected Academic Intelligence</span>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-              {/* Left Column: Believable Raw Notice */}
-              <div className="lg:col-span-5 bg-[#FAF8DB] border border-[#E8E5BA] rounded-xl p-6 relative font-mono text-xs text-[#172D50]/80 flex flex-col justify-between shadow-xs">
-                <div className="absolute top-3 right-3 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-[#E8E5BA]/60 text-[#172D50]/70">
-                  Raw Circular / PDF
-                </div>
-
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="p-6 rounded-xl bg-[#FAF8DB]/60 border border-[#E8E5BA] flex flex-col justify-between">
                 <div>
-                  <div className="border-b border-[#E8E5BA] pb-3 mb-4">
-                    <div className="font-bold text-[#172D50] uppercase text-xs">Department of Computer Engineering</div>
-                    <div className="text-[11px] text-[#172D50]/60">Circular Ref: CE/2026/NOV-14 · Date: Nov 05, 2026</div>
+                  <div className="w-8 h-8 rounded-lg bg-[#172D50] text-[#F2EE98] flex items-center justify-center font-mono font-bold text-xs mb-3">
+                    01
                   </div>
-
-                  <p className="leading-relaxed mb-3 text-[12px] font-sans text-[#172D50]/90">
-                    All third-year students (Batch 2024-2028) are hereby informed that <span className="bg-[#F2EE98] px-1 font-semibold text-[#172D50]">Internal Test 2 for CSA</span> is scheduled on <span className="bg-[#F2EE98] px-1 font-semibold text-[#172D50]">13 November 2026</span> from <span className="bg-[#F2EE98] px-1 font-semibold text-[#172D50]">10:00 AM to 11:30 AM</span> in Examination Hall Room 204.
-                  </p>
-                  <p className="leading-relaxed text-[12px] font-sans text-[#172D50]/90">
-                    Practical records must be deposited to the office <span className="bg-[#FFF3E0] text-[#E65100] px-1 font-semibold">no later than 12:00 noon</span> on the same day. Seating for Roll Nos 45–60 is tentatively shifted to Room 206 pending electrical clearance...
+                  <h3 className="font-serif font-bold text-base text-[#172D50] mb-2">
+                    Circular Ingestion & OCR
+                  </h3>
+                  <p className="text-xs text-[#172D50]/70 font-sans leading-relaxed">
+                    Parses departmental notices, university circulars, and exam timetables. Sanitizes format and detects critical dates.
                   </p>
                 </div>
-
-                <div className="mt-6 pt-3 border-t border-[#E8E5BA] flex items-center justify-between text-[11px] text-[#172D50]/60">
-                  <span>Format: Unstructured Text</span>
-                  <span className="text-[#E65100]">2 buried deadlines flagged</span>
+                <div className="mt-4 pt-3 border-t border-[#E8E5BA] text-[11px] font-mono text-[#10380B]">
+                  Grounded Factual Extraction
                 </div>
               </div>
 
-              {/* Middle Divider / Transformation Indicator (Desktop) */}
-              <div className="hidden lg:flex lg:col-span-1 items-center justify-center">
-                <div className="w-9 h-9 rounded-full bg-[#172D50] text-[#F2EE98] flex items-center justify-center shadow-xs">
-                  <ArrowRight className="w-4 h-4" />
+              <div className="p-6 rounded-xl bg-[#FAF8DB]/60 border border-[#E8E5BA] flex flex-col justify-between">
+                <div>
+                  <div className="w-8 h-8 rounded-lg bg-[#172D50] text-[#F2EE98] flex items-center justify-center font-mono font-bold text-xs mb-3">
+                    02
+                  </div>
+                  <h3 className="font-serif font-bold text-base text-[#172D50] mb-2">
+                    Uncertainty & Conflict Audit
+                  </h3>
+                  <p className="text-xs text-[#172D50]/70 font-sans leading-relaxed">
+                    Identifies buried deadlines, tentative room allocations, and checks full-duration overlap against student timetables.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-[#E8E5BA] text-[11px] font-mono text-[#E65100]">
+                  Human-in-the-Loop Verification
                 </div>
               </div>
 
-              {/* Right Column: Clean Extracted Intelligence & Action Items */}
-              <div className="lg:col-span-6 bg-[#FEFDE6] border border-[#172D50]/20 rounded-xl p-6 flex flex-col justify-between shadow-xs">
+              <div className="p-6 rounded-xl bg-[#FAF8DB]/60 border border-[#E8E5BA] flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-[#10380B]"></span>
-                      <span className="text-xs font-mono uppercase tracking-wider text-[#10380B] font-semibold">
-                        Notice Decoder Output
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-mono text-[#172D50]/60 bg-[#FAF8DB] px-2 py-0.5 rounded border border-[#E8E5BA]">
-                      Structured Schema
-                    </span>
+                  <div className="w-8 h-8 rounded-lg bg-[#172D50] text-[#F2EE98] flex items-center justify-center font-mono font-bold text-xs mb-3">
+                    03
                   </div>
-
-                  <h3 className="text-lg font-serif font-bold text-[#172D50]">Internal Test 2 (CSA)</h3>
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs font-mono">
-                    <div className="p-2.5 rounded bg-[#FAF8DB]/80 border border-[#E8E5BA]">
-                      <span className="text-[#172D50]/60 block text-[10px]">TIME & VENUE</span>
-                      <span className="font-semibold text-[#172D50]">10:00–11:30 AM · Room 204</span>
-                    </div>
-                    <div className="p-2.5 rounded bg-[#FAF8DB]/80 border border-[#E8E5BA]">
-                      <span className="text-[#172D50]/60 block text-[10px]">MANDATORY DEADLINE</span>
-                      <span className="font-semibold text-[#E65100]">12:00 Noon (Practical Records)</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 p-3 rounded bg-[#FFF3E0]/70 border border-[#FFE0B2] text-xs font-sans text-[#E65100]">
-                    <strong>Flagged Uncertainty:</strong> Roll Nos 45–60 tentatively shifted to Room 206. Verification required on notice board.
-                  </div>
+                  <h3 className="font-serif font-bold text-base text-[#172D50] mb-2">
+                    Protected Academic Calendar
+                  </h3>
+                  <p className="text-xs text-[#172D50]/70 font-sans leading-relaxed">
+                    Generates private Day, Week, Month, and Timeline schedules. Keeps your personal commitments private and accessible offline.
+                  </p>
                 </div>
-
-                <div className="mt-6 pt-3 border-t border-[#E8E5BA] flex items-center justify-between text-xs font-mono text-[#10380B]">
-                  <span className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Auto-synced with calendar
-                  </span>
-                  <span className="text-[#172D50]/60">Conflict engine active</span>
+                <div className="mt-4 pt-3 border-t border-[#E8E5BA] text-[11px] font-mono text-[#172D50]/60">
+                  Authentication Protected
                 </div>
               </div>
             </div>
@@ -271,7 +303,7 @@ export const PublicLanding: React.FC = () => {
         <ScrollCurvedJourney />
       </div>
 
-      {/* 6. Authentic Campus Authentication Portal (Editorial Card) */}
+      {/* 6. Authentic Campus Authentication Portal */}
       <section id="campus-auth-portal" className="py-24 md:py-32 px-6 md:px-12 bg-[#FAF8DB]/60 border-t border-[#E8E5BA]">
         <div className="max-w-xl mx-auto">
           {/* Header */}
@@ -295,7 +327,7 @@ export const PublicLanding: React.FC = () => {
               <button
                 type="button"
                 onClick={() => { setAuthMode('login'); setErrorMessage(''); setSuccessMessage(''); }}
-                className={`flex-1 py-2 text-xs font-mono font-medium rounded-md transition-all ${
+                className={`flex-1 py-2 text-xs font-mono font-medium rounded-md transition-all cursor-pointer ${
                   authMode === 'login'
                     ? 'bg-[#172D50] text-[#FEFDE6] shadow-2xs'
                     : 'text-[#172D50]/70 hover:text-[#172D50]'
@@ -306,7 +338,7 @@ export const PublicLanding: React.FC = () => {
               <button
                 type="button"
                 onClick={() => { setAuthMode('register'); setErrorMessage(''); setSuccessMessage(''); }}
-                className={`flex-1 py-2 text-xs font-mono font-medium rounded-md transition-all ${
+                className={`flex-1 py-2 text-xs font-mono font-medium rounded-md transition-all cursor-pointer ${
                   authMode === 'register'
                     ? 'bg-[#172D50] text-[#FEFDE6] shadow-2xs'
                     : 'text-[#172D50]/70 hover:text-[#172D50]'
@@ -317,7 +349,7 @@ export const PublicLanding: React.FC = () => {
               <button
                 type="button"
                 onClick={() => { setAuthMode('forgot'); setErrorMessage(''); setSuccessMessage(''); }}
-                className={`flex-1 py-2 text-xs font-mono font-medium rounded-md transition-all ${
+                className={`flex-1 py-2 text-xs font-mono font-medium rounded-md transition-all cursor-pointer ${
                   authMode === 'forgot'
                     ? 'bg-[#172D50] text-[#FEFDE6] shadow-2xs'
                     : 'text-[#172D50]/70 hover:text-[#172D50]'
@@ -336,7 +368,7 @@ export const PublicLanding: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleQuickFill('student@campus.edu', 'campus2026')}
-                className="px-2.5 py-1 rounded bg-[#172D50] text-[#F2EE98] hover:bg-[#244270] transition-colors text-[11px] font-medium"
+                className="px-2.5 py-1 rounded bg-[#172D50] text-[#F2EE98] hover:bg-[#244270] transition-colors text-[11px] font-medium cursor-pointer"
               >
                 1-Click Autofill
               </button>
@@ -344,15 +376,15 @@ export const PublicLanding: React.FC = () => {
 
             {/* Error Message */}
             {errorMessage && (
-              <div className="mb-4 p-3 rounded-lg bg-[#FFF0F0] border border-[#FCA5A5] text-[#B91C1C] text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
+              <div className="mb-4 p-3.5 rounded-lg bg-[#FFF0F0] border border-[#FCA5A5] text-[#B91C1C] text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
             {/* Success Message */}
             {successMessage && (
-              <div className="mb-4 p-3 rounded-lg bg-[#F0FDF4] border border-[#86EFAC] text-[#15803D] text-xs flex items-center gap-2">
+              <div className="mb-4 p-3.5 rounded-lg bg-[#F0FDF4] border border-[#86EFAC] text-[#15803D] text-xs flex items-center gap-2">
                 <Check className="w-4 h-4 shrink-0" />
                 <span>{successMessage}</span>
               </div>
@@ -369,7 +401,7 @@ export const PublicLanding: React.FC = () => {
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Alex Morgan"
+                    placeholder="e.g. Kavya Rane"
                     className="w-full px-3.5 py-2.5 rounded-lg bg-[#FAF8DB]/50 border border-[#E8E5BA] text-sm text-[#172D50] placeholder-[#172D50]/40 focus:outline-hidden focus:border-[#172D50] focus:ring-1 focus:ring-[#172D50] transition-all font-sans"
                   />
                 </div>
@@ -410,7 +442,7 @@ export const PublicLanding: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-3 text-[#172D50]/40 hover:text-[#172D50] transition-colors"
+                    className="absolute right-3 top-3 text-[#172D50]/40 hover:text-[#172D50] transition-colors cursor-pointer"
                     tabIndex={-1}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -448,7 +480,7 @@ export const PublicLanding: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setAuthMode('forgot')}
-                    className="text-[#E65100] hover:underline"
+                    className="text-[#E65100] hover:underline cursor-pointer"
                   >
                     Forgot password?
                   </button>
