@@ -7,7 +7,9 @@ const {
   createNotice,
   getAllNotices,
   getNoticeById,
-  updateNoticeStatus
+  updateNoticeStatus,
+  updateNotice,
+  deleteNotice
 } = require('../controllers/notice.controller');
 const { requireAuth, requireRole } = require('../middleware/auth.middleware');
 
@@ -44,6 +46,12 @@ router.get('/', getAllNotices);
 
 // GET /api/notices/:id - Retrieve a specific notice by ID
 router.get('/:id', getNoticeById);
+
+// PUT /api/notices/:id - Update an existing notice by ID
+router.put('/:id', updateNotice);
+
+// DELETE /api/notices/:id - Delete a notice by ID
+router.delete('/:id', deleteNotice);
 
 // PATCH /api/notices/:id/status - Update notice status (Professor only)
 router.patch('/:id/status', requireRole('professor'), updateNoticeStatus);

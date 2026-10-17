@@ -383,6 +383,185 @@ async function updateNoticeStatus(req, res, next) {
   }
 }
 
+/**
+ * Controller: Update an existing notice by ID
+ * PUT /api/notices/:id
+ */
+async function updateNotice(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        error: 'Notice ID is required in URL parameter.'
+      });
+    }
+
+    if (!req.body || typeof req.body !== 'object' || Object.keys(req.body).length === 0) {
+      return res.status(400).json({
+        error: 'Request body cannot be empty.'
+      });
+    }
+
+    let supabase;
+    try {
+      supabase = getSupabaseClient();
+    } catch (dbConfigError) {
+      return res.status(500).json({
+        error: dbConfigError.message
+      });
+    }
+
+    // Prepare fields to update
+    const updates = {};
+
+    // If 'text' is sent, re-extract and update original text and extracted metadata
+    if (req.body.text && typeof req.body.text === 'string' && req.body.text.trim() !== '') {
+      const cleanText = req.body.text.trim();
+      const processedData = await processNotice(cleanText);
+
+      updates.original_text = cleanText;
+      updates.summary = req.body.summary || processedData.summary;
+      updates.date = req.body.date || processedData.date;
+      updates.time = req.body.time || processedData.time;
+      updates.venue = req.body.venue || processedData.venue;
+      updates.target_audience = req.body.target_audience || processedData.target_audience;
+      updates.required_action = req.body.required_action || processedData.required_action;
+    } else {
+      // Allow updating individual fields directly
+      if (req.body.original_text !== undefined) updates.original_text = req.body.original_text;
+      if (req.body.summary !== undefined) updates.summary = req.body.summary;
+      if (req.body.date !== undefined) updates.date = req.body.date;
+      if (req.body.time !== undefined) updates.time = req.body.time;
+      if (req.body.venue !== undefined) updates.venue = req.body.venue;
+      if (req.body.target_audience !== undefined) updates.target_audience = req.body.target_audience;
+      if (req.body.required_action !== undefined) updates.required_action = req.body.required_action;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        error: 'No valid notice fields provided to update.'
+      });
+    }
+
+    // 1. Check if the notice exists first
+    const { data: existingNotice, error: findError } = await supabase
+      .from('notices')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (findError) {
+      console.error('Supabase Query Error:', findError.message);
+      return res.status(500).json({
+        error: `Database error: ${findError.message}`
+      });
+    }
+
+    if (!existingNotice) {
+      return res.status(404).json({
+        error: 'Notice not found.'
+      });
+    }
+
+    // 2. Perform the update
+    const { data, error } = await supabase
+      .from('notices')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error('Supabase Update Error:', error.message);
+      return res.status(500).json({
+        error: `Database error: ${error.message}`
+      });
+    }
+
+    if (!data) {
+      // Row exists but was not updated, which happens if Supabase RLS update policy is missing
+      return res.status(403).json({
+        error: 'Notice exists but could not be updated. Ensure your Supabase RLS policy allows UPDATE on the notices table (run: CREATE POLICY "Allow public update notices" ON notices FOR UPDATE USING (true) WITH CHECK (true); in Supabase SQL editor).'
+      });
+    }
+
+    return res.status(200).json({
+      message: 'Notice updated successfully.',
+      notice: data
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Controller: Delete a notice by ID
+ * DELETE /api/notices/:id
+ */
+async function deleteNotice(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        error: 'Notice ID is required in URL parameter.'
+      });
+    }
+
+    let supabase;
+    try {
+      supabase = getSupabaseClient();
+    } catch (dbConfigError) {
+      return res.status(500).json({
+        error: dbConfigError.message
+      });
+    }
+
+    // 1. Check if the notice exists first
+    const { data: existingNotice, error: findError } = await supabase
+      .from('notices')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (findError) {
+      console.error('Supabase Query Error:', findError.message);
+      return res.status(500).json({
+        error: `Database error: ${findError.message}`
+      });
+    }
+
+    if (!existingNotice) {
+      return res.status(404).json({
+        error: 'Notice not found.'
+      });
+    }
+
+    // 2. Perform the delete
+    const { data, error } = await supabase
+      .from('notices')
+      .delete()
+      .eq('id', id)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error('Supabase Delete Error:', error.message);
+      return res.status(500).json({
+        error: `Database error: ${error.message}`
+      });
+    }
+
+    return res.status(200).json({
+      message: 'Notice deleted successfully.',
+      deletedNotice: data || existingNotice
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   uploadNoticeFile,
   checkDuplicateNotice,
@@ -390,6 +569,8 @@ module.exports = {
   getAllNotices,
   getNoticeById,
   updateNoticeStatus,
+  updateNotice,
+  deleteNotice,
   memoryNotices,
   memoryNotifications
 };

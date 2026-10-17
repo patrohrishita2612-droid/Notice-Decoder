@@ -84,20 +84,31 @@ ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conflict_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
--- Development policies: allow full access for authenticated/anon client
-CREATE POLICY "Allow read notices" ON notices FOR SELECT USING (true);
-CREATE POLICY "Allow insert notices" ON notices FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow update notices" ON notices FOR UPDATE USING (true);
+-- Development policy: allow full access to anon/authenticated keys
+CREATE POLICY "Allow public read notices" ON notices FOR SELECT USING (true);
+CREATE POLICY "Allow public insert notices" ON notices FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update notices" ON notices FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public delete notices" ON notices FOR DELETE USING (true);
 
-CREATE POLICY "Allow read events" ON events FOR SELECT USING (true);
-CREATE POLICY "Allow insert events" ON events FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow update events" ON events FOR UPDATE USING (true);
-CREATE POLICY "Allow delete events" ON events FOR DELETE USING (true);
+CREATE POLICY "Allow public read events" ON events FOR SELECT USING (true);
+CREATE POLICY "Allow public insert events" ON events FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update events" ON events FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public delete events" ON events FOR DELETE USING (true);
 
-CREATE POLICY "Allow read conflicts" ON conflict_requests FOR SELECT USING (true);
-CREATE POLICY "Allow insert conflicts" ON conflict_requests FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow update conflicts" ON conflict_requests FOR UPDATE USING (true);
+CREATE POLICY "Allow public read conflicts" ON conflict_requests FOR SELECT USING (true);
+CREATE POLICY "Allow public insert conflicts" ON conflict_requests FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update conflicts" ON conflict_requests FOR UPDATE USING (true) WITH CHECK (true);
 
-CREATE POLICY "Allow read notifications" ON notifications FOR SELECT USING (true);
-CREATE POLICY "Allow insert notifications" ON notifications FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow update notifications" ON notifications FOR UPDATE USING (true);
+CREATE POLICY "Allow public read notifications" ON notifications FOR SELECT USING (true);
+CREATE POLICY "Allow public insert notifications" ON notifications FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update notifications" ON notifications FOR UPDATE USING (true) WITH CHECK (true);
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON TABLE public.notices
+TO anon, authenticated;
+
+GRANT USAGE, SELECT
+ON SEQUENCE public.notices_id_seq
+TO anon, authenticated;
