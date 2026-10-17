@@ -2,9 +2,12 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ChevronLeft, ChevronRight, Plus, Clock, MapPin, 
   Trash2, Edit3, X, AlertTriangle, Calendar as CalendarIcon, 
-  Download, Bell
+  Download, Bell, Lock
 } from 'lucide-react';
 import { downloadNoticeIcs } from '../utils/icsExport';
+import { useAuth } from '../context/AuthContext';
+import { ConflictReportModal } from './ConflictReportModal';
+import { ConflictRequest } from '../types';
 
 export interface CalendarEvent {
   id: string;
@@ -20,6 +23,10 @@ export interface CalendarEvent {
   uncertainFlags?: { field: string; reason: string; suggestion: string }[];
   isAllDay?: boolean;
   reminderMinutes?: number;
+  isOfficial?: boolean;
+  publishedBy?: string;
+  targetAudience?: string;
+  sourceNoticeId?: string;
 }
 
 export const INITIAL_ACADEMIC_EVENTS: CalendarEvent[] = [
@@ -33,7 +40,8 @@ export const INITIAL_ACADEMIC_EVENTS: CalendarEvent[] = [
     color: 'cyan',
     venue: 'Seminar Hall B',
     description: 'Faculty and student coordinators briefing for tech symposium.',
-    reminderMinutes: 15
+    reminderMinutes: 15,
+    isOfficial: false
   },
   {
     id: 'ev-2',
@@ -45,7 +53,10 @@ export const INITIAL_ACADEMIC_EVENTS: CalendarEvent[] = [
     color: 'blue',
     venue: 'Room 204',
     description: 'Computer System Architecture weekly regular lecture by Dr. S. Mehta.',
-    reminderMinutes: 10
+    reminderMinutes: 10,
+    isOfficial: true,
+    publishedBy: 'Dr. Evelyn Reed (Head of Department)',
+    targetAudience: 'CS-302 CSA'
   },
   {
     id: 'ev-3',
@@ -58,7 +69,10 @@ export const INITIAL_ACADEMIC_EVENTS: CalendarEvent[] = [
     venue: 'Department Office',
     description: 'Mandatory deposit of certified practical journals for internal assessment.',
     isAllDay: false,
-    sourceNoticeTitle: 'Internal Test 2 (CSA)'
+    sourceNoticeTitle: 'Internal Test 2 (CSA)',
+    isOfficial: true,
+    publishedBy: 'Dr. Evelyn Reed (Head of Department)',
+    targetAudience: 'CS-302 CSA'
   },
   {
     id: 'ev-4',
@@ -70,7 +84,10 @@ export const INITIAL_ACADEMIC_EVENTS: CalendarEvent[] = [
     color: 'forest',
     venue: 'Seminar Hall B',
     description: 'Dr. A. Ramanujan (Google Cloud) expert session on scalable cloud microservices.',
-    sourceNoticeTitle: 'Tech-Innovate Series 2026'
+    sourceNoticeTitle: 'Tech-Innovate Series 2026',
+    isOfficial: true,
+    publishedBy: 'Dr. Evelyn Reed (Head of Department)',
+    targetAudience: 'All Students'
   },
   {
     id: 'ev-5',
@@ -82,7 +99,10 @@ export const INITIAL_ACADEMIC_EVENTS: CalendarEvent[] = [
     color: 'amber',
     venue: 'Project Lab 3',
     description: 'Capstone project progress review with faculty evaluation committee.',
-    sourceNoticeTitle: 'Capstone Committee Notice'
+    sourceNoticeTitle: 'Capstone Committee Notice',
+    isOfficial: true,
+    publishedBy: 'Dr. Evelyn Reed (Head of Department)',
+    targetAudience: 'All Students'
   },
   {
     id: 'ev-6',
@@ -153,6 +173,8 @@ export interface PersonalAcademicCalendarProps {
   onEventsChange?: (events: CalendarEvent[]) => void;
   selectedDate?: string;
   onSelectDate?: (date: string) => void;
+  conflictRequests?: ConflictRequest[];
+  onConflictSubmit?: (request: Omit<ConflictRequest, 'id' | 'createdAt' | 'status'>) => void;
 }
 
 export const MONTH_NAMES = [
@@ -168,8 +190,14 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
   events: propEvents,
   onEventsChange,
   selectedDate: propSelectedDate,
-  onSelectDate
+  onSelectDate,
+  conflictRequests = [],
+  onConflictSubmit
 }) => {
+  const { user } = useAuth();
+  const isStudent = user?.role !== 'professor';
+  const [isConflictReportOpen, setIsConflictReportOpen] = useState(false);
+
   const [internalEvents, setInternalEvents] = useState<CalendarEvent[]>(propEvents || INITIAL_ACADEMIC_EVENTS);
 
   // Sync if propEvents change
@@ -491,6 +519,11 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
 
   // Open Edit Event modal
   const handleOpenEditEvent = (ev: CalendarEvent) => {
+    if (ev.isOfficial && isStudent) {
+      setSelectedTimelineEventId(ev.id);
+      setIsConflictReportOpen(true);
+      return;
+    }
     setEditingEventId(ev.id);
     setFormTitle(ev.title);
     setFormDate(ev.date);
@@ -509,6 +542,9 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
 
   // Prompt delete confirmation
   const handlePromptDelete = (ev: CalendarEvent) => {
+    if (ev.isOfficial && isStudent) {
+      return;
+    }
     setEventToDelete(ev);
   };
 
@@ -589,6 +625,10 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
   // Shift selected event on daily timeline
   const handleShiftTimelineEvent = (deltaMinutes: number) => {
     if (!selectedTimelineEvent || selectedTimelineEvent.isAllDay) return;
+    if (selectedTimelineEvent.isOfficial && isStudent) {
+      setIsConflictReportOpen(true);
+      return;
+    }
 
     const s = parseTimeToMinutes(selectedTimelineEvent.startTime);
     const e = parseTimeToMinutes(selectedTimelineEvent.endTime);
@@ -1024,7 +1064,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
         </div>
 
         {/* Red Overlap Caption / Conflict Status */}
-        <div className="relative mt-4 flex items-center justify-center text-center">
+        <div className="relative mt-4 flex flex-col items-center justify-center text-center gap-1">
           <p className={`text-xs sm:text-sm font-mono font-semibold transition-all ${
             selectedDateConflict?.hasConflict ? 'text-[#D9574F]' : 'text-[#A8B8A0]'
           }`}>
@@ -1032,6 +1072,19 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
               ? `${selectedDateConflict.overlapMinutes} min overlap: check the full duration`
               : '0 min overlap: check the full duration (Clear)'}
           </p>
+
+          {selectedDateConflict?.hasConflict && isStudent && (
+            <p className="text-[11px] font-mono text-[#172B4D]/70 flex items-center justify-center gap-1">
+              <span>Notice conflict detected. Cannot reschedule official lecture directly?</span>
+              <button
+                type="button"
+                onClick={() => setIsConflictReportOpen(true)}
+                className="text-[#D9574F] font-bold hover:underline cursor-pointer"
+              >
+                Request Schedule Adjustment &rarr;
+              </button>
+            </p>
+          )}
         </div>
 
         {/* Timeline Interactive Controls & Quick Shift Bar */}
@@ -1045,51 +1098,73 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             >
               {selectedDateEvents.map(ev => (
                 <option key={ev.id} value={ev.id}>
-                  {ev.title} ({ev.startTime}–{ev.endTime})
+                  {ev.title} {ev.isOfficial ? '★ (Official Notice)' : ''} ({ev.startTime}–{ev.endTime})
                 </option>
               ))}
             </select>
 
-            {/* Quick Shift Buttons */}
-            <span className="text-[#172B4D]/60 text-[11px] ml-2">Shift:</span>
-            <button
-              type="button"
-              onClick={() => handleShiftTimelineEvent(-15)}
-              className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
-              title="Shift -15 minutes"
-            >
-              -15m
-            </button>
-            <button
-              type="button"
-              onClick={() => handleShiftTimelineEvent(15)}
-              className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
-              title="Shift +15 minutes"
-            >
-              +15m
-            </button>
-            <button
-              type="button"
-              onClick={() => handleShiftTimelineEvent(30)}
-              className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
-              title="Shift +30 minutes"
-            >
-              +30m
-            </button>
+            {/* If selected event is Official and user is a Student: Lock editing, show Conflict Report button */}
+            {selectedTimelineEvent?.isOfficial && isStudent ? (
+              <div className="flex flex-wrap items-center gap-2 ml-1">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#172B4D] text-[#D9A928] text-xs font-mono font-bold shadow-2xs">
+                  <Lock className="w-3.5 h-3.5 text-[#D9A928]" />
+                  <span>Official Notice (Locked)</span>
+                </span>
 
-            {selectedTimelineEvent && (
-              <button
-                type="button"
-                onClick={() => handleOpenEditEvent(selectedTimelineEvent)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer ml-2"
-              >
-                <Edit3 className="w-3 h-3" />
-                <span>Edit</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setIsConflictReportOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#D9A928] hover:bg-[#B88C1A] text-[#172B4D] font-mono text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Report Conflict / Request Schedule Change</span>
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Quick Shift Buttons */}
+                <span className="text-[#172B4D]/60 text-[11px] ml-2">Shift:</span>
+                <button
+                  type="button"
+                  onClick={() => handleShiftTimelineEvent(-15)}
+                  className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
+                  title="Shift -15 minutes"
+                >
+                  -15m
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShiftTimelineEvent(15)}
+                  className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
+                  title="Shift +15 minutes"
+                >
+                  +15m
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShiftTimelineEvent(30)}
+                  className="px-2 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
+                  title="Shift +30 minutes"
+                >
+                  +30m
+                </button>
+
+                {selectedTimelineEvent && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditEvent(selectedTimelineEvent)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#FFFDF7] border border-[#E2DDD0] text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer ml-2"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>Edit</span>
+                  </button>
+                )}
+              </>
             )}
           </div>
 
-          {selectedTimelineEvent && (
+          {/* Delete Action (only if personal or if professor) */}
+          {selectedTimelineEvent && (!selectedTimelineEvent.isOfficial || !isStudent) && (
             <button
               type="button"
               onClick={() => handlePromptDelete(selectedTimelineEvent)}
@@ -1702,6 +1777,27 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             </div>
           </div>
         </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* 7. SCHEDULE CONFLICT REQUEST MODAL (STUDENT TO PROFESSOR)     */}
+      {/* ============================================================ */}
+      {selectedTimelineEvent && (
+        <ConflictReportModal
+          isOpen={isConflictReportOpen}
+          onClose={() => setIsConflictReportOpen(false)}
+          officialEvent={selectedTimelineEvent}
+          conflictingEvent={selectedDateEvents.find(e => e.id !== selectedTimelineEvent.id) || null}
+          overlapMinutes={selectedDateConflict?.hasConflict ? selectedDateConflict.overlapMinutes : 30}
+          existingRequest={conflictRequests.find(c => 
+            (c.eventId && String(c.eventId) === String(selectedTimelineEvent.id)) ||
+            (c.eventTitle && c.eventTitle.toLowerCase().includes(selectedTimelineEvent.title.toLowerCase()))
+          ) || null}
+          onSubmitConflict={(req) => {
+            onConflictSubmit?.(req);
+            setIsConflictReportOpen(false);
+          }}
+        />
       )}
 
     </div>
