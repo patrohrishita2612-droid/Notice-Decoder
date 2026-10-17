@@ -22,22 +22,61 @@ export const InteractiveDecodeModal: React.FC<InteractiveDecodeModalProps> = ({ 
     setDecodedResult(selected);
   };
 
-  const handleRunDecode = () => {
+  const handleRunDecode = async () => {
     setIsDecoding(true);
-    // Simulate AI parsing delay
-    setTimeout(() => {
-      // Find matching mock or build structured heuristic
-      const matched = MOCK_NOTICES_COLLECTION.find(n =>
-        inputText.toLowerCase().includes(n.title.toLowerCase().split(' ')[0])
-      ) || {
-        ...MOCK_NOTICES_COLLECTION[0],
-        rawText: inputText,
-        title: 'Custom Decoded Academic Notice',
-        summary: 'Extracted summary from user pasted notice. Review extracted fields before saving.'
-      };
-      setDecodedResult(matched);
-      setIsDecoding(false);
-    }, 600);
+    try {
+      const response = await fetch('http://localhost:5000/api/notices/decode', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ text: inputText })
+      });
+
+      if (response.ok) {
+        const json = await response.json();
+        const data = json.data;
+        if (data) {
+          const mapped: ExtractedNotice = {
+            id: `notice-${Date.now()}`,
+            title: data.title || 'Decoded Notice',
+            rawText: inputText,
+            date: data.event_date || 'Date TBA',
+            startTime: data.start_time || 'Time TBA',
+            endTime: data.end_time || '',
+            venue: data.venue || 'Campus / TBA',
+            deadline: data.deadline || 'No deadline specified',
+            deadlineAction: (data.required_actions && data.required_actions[0]) || 'Review notice details',
+            summary: data.summary || 'Summary extracted from notice.',
+            audience: data.target_audience || 'All Students',
+            category: 'Academic',
+            uncertainFlags: (data.missing_information || []).map((info: string) => ({
+              field: 'Ambiguity',
+              reason: info,
+              suggestion: 'Verify with department coordinator'
+            })),
+            urgency: data.urgency === 'high' ? 'high' : data.urgency === 'medium' ? 'medium' : 'normal'
+          };
+          setDecodedResult(mapped);
+          setIsDecoding(false);
+          return;
+        }
+      }
+    } catch {
+      // Backend not running or unreachable: fallback to specimen/mock
+    }
+
+    // Fallback: specimen match or structured heuristic
+    const matched = MOCK_NOTICES_COLLECTION.find(n =>
+      inputText.toLowerCase().includes(n.title.toLowerCase().split(' ')[0])
+    ) || {
+      ...MOCK_NOTICES_COLLECTION[0],
+      rawText: inputText,
+      title: 'Custom Decoded Academic Notice',
+      summary: 'Extracted summary from user pasted notice. Review extracted fields before saving.'
+    };
+    setDecodedResult(matched);
+    setIsDecoding(false);
   };
 
   return (

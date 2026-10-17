@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   createNotice,
+  decodeNotice,
   getAllNotices,
   getNoticeById,
   updateNotice,
@@ -9,10 +10,13 @@ const {
 } = require('../controllers/notice.controller');
 const { requireAuth } = require('../middleware/auth.middleware');
 
-// Protect all notice routes with authentication
+// POST /api/notices/decode - Decode notice text into 13-field structured intelligence (sandbox & preview)
+router.post('/decode', decodeNotice);
+
+// Protect all private notice persistence & CRUD routes with authentication
 router.use(requireAuth);
 
-// POST /api/notices - Submit and process a new notice
+// POST /api/notices - Submit and process a new notice (AI extraction + persistence)
 router.post('/', createNotice);
 
 // GET /api/notices - Retrieve user's private decoded notices

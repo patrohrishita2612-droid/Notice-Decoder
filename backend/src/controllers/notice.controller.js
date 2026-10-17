@@ -1,4 +1,5 @@
 const { getSupabaseClient } = require('../config/database');
+const { isSupabaseConfigured } = require('../config/env');
 const { processNotice } = require('../services/ai.service');
 
 /**
@@ -24,10 +25,29 @@ async function createNotice(req, res, next) {
 
     const cleanText = text.trim();
 
-    // 2. Process the notice text (using AI service interface)
+    // 2. Process the notice text (using Member 1 AI service)
     const processedData = await processNotice(cleanText);
 
-    // 3. Connect to Supabase
+    // 3. Connect to Supabase if configured
+    if (!isSupabaseConfigured()) {
+      return res.status(201).json({
+        message: 'Notice processed successfully (database not configured, record in-memory).',
+        notice: {
+          id: Date.now(),
+          original_text: cleanText,
+          summary: processedData.summary,
+          date: processedData.date,
+          time: processedData.time,
+          venue: processedData.venue,
+          target_audience: processedData.target_audience,
+          required_action: processedData.required_action,
+          created_at: new Date().toISOString(),
+          ...processedData
+        },
+        analysis: processedData
+      });
+    }
+
     let supabase;
     try {
       supabase = getSupabaseClient();
@@ -64,9 +84,57 @@ async function createNotice(req, res, next) {
     // 5. Return success response
     return res.status(201).json({
       message: 'Notice processed and saved successfully.',
-      notice: data
+      notice: {
+        ...data,
+        ...processedData
+      },
+      analysis: processedData
     });
   } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({
+        error: error.message,
+        details: error.details
+      });
+    }
+    next(error);
+  }
+}
+
+/**
+ * Controller: Pure AI notice decode (without mandatory database insertion)
+ * POST /api/notices/decode
+ */
+async function decodeNotice(req, res, next) {
+  try {
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({
+        error: 'Invalid request body. Expected JSON.'
+      });
+    }
+
+    const { text } = req.body;
+
+    if (!text || typeof text !== 'string' || text.trim() === '') {
+      return res.status(400).json({
+        error: 'Notice text is required.'
+      });
+    }
+
+    const cleanText = text.trim();
+    const result = await processNotice(cleanText);
+
+    return res.status(200).json({
+      message: 'Notice decoded successfully.',
+      data: result
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({
+        error: error.message,
+        details: error.details
+      });
+    }
     next(error);
   }
 }
@@ -77,6 +145,12 @@ async function createNotice(req, res, next) {
  */
 async function getAllNotices(req, res, next) {
   try {
+    if (!isSupabaseConfigured()) {
+      return res.status(200).json({
+        notices: []
+      });
+    }
+
     let supabase;
     try {
       supabase = getSupabaseClient();
@@ -117,6 +191,12 @@ async function getNoticeById(req, res, next) {
     if (!id) {
       return res.status(400).json({
         error: 'Notice ID is required in URL parameter.'
+      });
+    }
+
+    if (!isSupabaseConfigured()) {
+      return res.status(404).json({
+        error: 'Notice not found.'
       });
     }
 
@@ -176,15 +256,6 @@ async function updateNotice(req, res, next) {
       });
     }
 
-    let supabase;
-    try {
-      supabase = getSupabaseClient();
-    } catch (dbConfigError) {
-      return res.status(500).json({
-        error: dbConfigError.message
-      });
-    }
-
     // Prepare fields to update
     const updates = {};
 
@@ -214,6 +285,22 @@ async function updateNotice(req, res, next) {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({
         error: 'No valid notice fields provided to update.'
+      });
+    }
+
+    if (!isSupabaseConfigured()) {
+      return res.status(200).json({
+        message: 'Notice updated successfully (in-memory).',
+        notice: { id, ...updates, updated_at: new Date().toISOString() }
+      });
+    }
+
+    let supabase;
+    try {
+      supabase = getSupabaseClient();
+    } catch (dbConfigError) {
+      return res.status(500).json({
+        error: dbConfigError.message
       });
     }
 
@@ -264,6 +351,12 @@ async function updateNotice(req, res, next) {
       notice: data
     });
   } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({
+        error: error.message,
+        details: error.details
+      });
+    }
     next(error);
   }
 }
@@ -279,6 +372,13 @@ async function deleteNotice(req, res, next) {
     if (!id) {
       return res.status(400).json({
         error: 'Notice ID is required in URL parameter.'
+      });
+    }
+
+    if (!isSupabaseConfigured()) {
+      return res.status(200).json({
+        message: 'Notice deleted successfully (in-memory).',
+        deletedNotice: { id }
       });
     }
 
@@ -340,5 +440,6 @@ module.exports = {
   getAllNotices,
   getNoticeById,
   updateNotice,
-  deleteNotice
+  deleteNotice,
+  decodeNotice
 };

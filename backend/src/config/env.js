@@ -7,8 +7,16 @@ const env = {
   PORT: process.env.PORT || 5000,
   SUPABASE_URL: process.env.SUPABASE_URL ? process.env.SUPABASE_URL.trim() : '',
   SUPABASE_KEY: process.env.SUPABASE_KEY ? process.env.SUPABASE_KEY.trim() : '',
-  GROK_API_KEY: process.env.GROK_API_KEY ? process.env.GROK_API_KEY.trim() : ''
+  GROK_API_KEY: process.env.GROK_API_KEY ? process.env.GROK_API_KEY.trim() : '',
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : ''
 };
+
+/**
+ * Check whether an AI provider API key is configured (Gemini or Grok)
+ */
+function isAiConfigured() {
+  return Boolean(env.GEMINI_API_KEY || env.GROK_API_KEY);
+}
 
 /**
  * Check whether required Supabase credentials are present
@@ -31,6 +39,7 @@ function validateSupabaseConfig() {
 
 module.exports = {
   env,
+  isAiConfigured,
   isSupabaseConfigured,
   validateSupabaseConfig
 };

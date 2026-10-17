@@ -176,6 +176,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
   const [extractedDraft, setExtractedDraft] = useState<ExtractedNotice & { isoDate: string } | null>(null);
   const [successToast, setSuccessToast] = useState('');
   const [errorToast, setErrorToast] = useState('');
+  const [backendDecodedData, setBackendDecodedData] = useState<any>(null);
 
   // Trigger decoding process with animated steps
   const handleStartDecoding = () => {
@@ -185,6 +186,25 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     }
     setErrorToast('');
     setIsDecoding(true);
+    setBackendDecodedData(null);
+
+    // Concurrently query backend AI decode API if online
+    if (isOnline) {
+      fetch('http://localhost:5000/api/notices/decode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: noticeText })
+      })
+        .then(res => res.ok ? res.json() : null)
+        .then(json => {
+          if (json?.data) {
+            setBackendDecodedData(json.data);
+          }
+        })
+        .catch(() => {
+          // Graceful fallback to offline heuristic
+        });
+    }
   };
 
   // Called when NoticeProcessingSteps finishes its moving line animation
@@ -204,6 +224,40 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     let isoDate = '2026-11-18';
     let humanDate = '18 November 2026';
     const flags: { field: string; reason: string; suggestion: string }[] = [];
+
+    // If backend Gemini AI returned decoded data, prioritize it
+    if (backendDecodedData) {
+      const data = backendDecodedData;
+      title = data.title || title;
+      summary = data.summary || summary;
+      if (data.event_date) {
+        humanDate = data.event_date;
+        const parsed = new Date(data.event_date);
+        if (!isNaN(parsed.getTime())) {
+          isoDate = parsed.toISOString().split('T')[0];
+        }
+      }
+      startTime = data.start_time || startTime;
+      endTime = data.end_time || endTime;
+      venue = data.venue || venue;
+      deadline = data.deadline || deadline;
+      if (data.required_actions && data.required_actions.length > 0) {
+        deadlineAction = data.required_actions[0];
+      }
+      if (data.urgency === 'high') urgency = 'high';
+      else if (data.urgency === 'medium') urgency = 'medium';
+      else urgency = 'normal';
+
+      if (data.missing_information && Array.isArray(data.missing_information)) {
+        data.missing_information.forEach((info: string) => {
+          flags.push({
+            field: 'Ambiguity / Missing Detail',
+            reason: info,
+            suggestion: 'Verify with department coordinator'
+          });
+        });
+      }
+    } else
 
     if (lower.includes('internal test') || lower.includes('csa') || lower.includes('assessment')) {
       title = 'Internal Test 2 (CSA)';
