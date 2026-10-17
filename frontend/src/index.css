@@ -1,108 +1,49 @@
 @import "tailwindcss";
 
 @theme {
-  --color-canvas: #FEFDE6;
-  --color-canvas-card: #FAF8F0;
-  --color-acid: #FCE519;
-  --color-acid-hover: #EEDB07;
   --color-navy: #172D50;
-  --color-blue-event: #1d4ed8;
-  --color-cyan-event: #06b6d4;
+  --color-navy-light: #244270;
+  --color-navy-dark: #0F1E36;
+  --color-cream: #F2EE98;
   --color-forest: #10380B;
-  --color-danger: #dc2626;
-  
-  --font-display: "Archivo", system-ui, -apple-system, sans-serif;
-  --font-body: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --color-forest-light: #1A5413;
+  --color-marigold: #FCE519;
+  --color-parchment: #FEFDE6;
+  --color-parchment-card: #FAF8DB;
+  --color-parchment-border: #E8E5BA;
+  --color-orange-accent: #E65100;
+  --color-orange-light: #FFF3E0;
+  --color-orange-border: #FFB74D;
+  --font-serif: "Fraunces", Georgia, Cambria, serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 }
 
 @layer base {
   body {
-    font-family: var(--font-body);
-    color: #000000;
-    background-color: var(--color-canvas);
+    font-family: var(--font-sans);
+    color: var(--color-navy);
+    background-color: var(--color-parchment);
     overflow-x: hidden;
   }
 
-  h1, h2, h3, h4, .font-heading {
-    font-family: var(--font-display);
-    font-weight: 800;
-    letter-spacing: -0.02em;
+  h1, h2, h3, .font-editorial {
+    font-family: var(--font-serif);
   }
 }
 
-/* Neobrutalist Hard Offset Shadows */
-.shadow-neo-sm {
-  box-shadow: 2px 2px 0px #000000;
-}
-
-.shadow-neo {
-  box-shadow: 4px 4px 0px #000000;
-}
-
-.shadow-neo-lg {
-  box-shadow: 6px 6px 0px #000000;
-}
-
-.shadow-neo-xl {
-  box-shadow: 8px 8px 0px #000000;
-}
-
-.btn-neo {
-  border: 2px solid #000000;
-  box-shadow: 4px 4px 0px #000000;
-  transition: all 0.15s cubic-bezier(0.2, 0, 0, 1);
-}
-
-.btn-neo:hover {
-  transform: translate(2px, 2px);
-  box-shadow: 2px 2px 0px #000000;
-}
-
-.btn-neo:active {
-  transform: translate(4px, 4px);
-  box-shadow: 0px 0px 0px #000000;
-}
-
-/* Continuous Marquee Animation */
-@keyframes marquee {
-  0% {
-    transform: translateX(0%);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
-.animate-marquee {
-  display: flex;
-  width: max-content;
-  animation: marquee 25s linear infinite;
-}
-
-.animate-marquee:hover {
-  animation-play-state: paused;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-marquee {
-    animation: none;
-    transform: none;
-  }
-}
-
-/* Custom crisp scrollbar */
+/* Subtle, refined custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
   background: #FEFDE6;
-  border-left: 2px solid #000;
 }
 ::-webkit-scrollbar-thumb {
-  background: #000;
+  background: #D9D5A0;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #FCE519;
+  background: #172D50;
 }

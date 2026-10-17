@@ -80,7 +80,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
   const [activeMode, setActiveMode] = useState<'idle' | 'add' | 'reschedule'>('idle');
 
   // Form states for Add Event
-  const [newTitle, setNewTitle] = useState<string>('Guest Session');
+  const [newTitle, setNewTitle] = useState<string>('Guest Lecture');
   const [newStartTime, setNewStartTime] = useState<string>('11:00');
   const [newEndTime, setNewEndTime] = useState<string>('12:00');
   const [newColor, setNewColor] = useState<'cyan' | 'blue' | 'forest' | 'amber'>('forest');
@@ -178,10 +178,8 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
     };
   }, [events]);
 
-  // Selected event for rescheduling
   const currentSelectedEvent = events.find(e => e.id === selectedEventId) || events[0];
 
-  // Handlers for Add Event
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
@@ -212,7 +210,6 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
     setActiveMode('idle');
   };
 
-  // Handlers for Reschedule
   const handleTimeShift = (minutesDelta: number) => {
     if (!currentSelectedEvent) return;
     const curStartM = parseTimeToMinutes(currentSelectedEvent.startTime);
@@ -266,19 +263,19 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
       {/* Anchor for conflicts navigation */}
       <div id="conflicts" className="relative -top-24" />
 
-      {/* Heading matching reference image */}
+      {/* Heading matching original editorial design */}
       {!compact && (
-        <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl font-black text-black text-center mb-8 uppercase tracking-tight">
+        <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold text-[#172D50] text-center mb-8 tracking-tight">
           {title}
         </h2>
       )}
 
-      {/* Compact Timeline Calendar Container (Pale cream, thin border matching reference) */}
-      <div className="bg-[#FAF8DB]/30 border-2 border-black rounded-xl p-5 sm:p-7 shadow-neo">
+      {/* Cream-colored Timeline Calendar Container matching original design */}
+      <div className="bg-[#FAF8DB]/40 border border-[#E8E5BA] rounded-xl p-5 sm:p-7 shadow-xs">
         <div className="overflow-x-auto pb-2">
           <div className="min-w-[540px]">
-            {/* Dynamic Horizontal Time Axis Header */}
-            <div className="relative h-6 text-xs font-mono text-black/70 mb-3 select-none font-bold">
+            {/* Horizontal Time Axis Header */}
+            <div className="relative h-6 text-xs font-mono text-[#172D50]/60 mb-3 select-none">
               {ticks.map((tickM, idx) => {
                 const tickLeftPct = ((tickM - scaleStart) / totalSpan) * 100;
                 const isMarkerTick =
@@ -290,7 +287,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                   <span
                     key={idx}
                     className={`absolute -translate-x-1/2 transition-colors duration-200 ${
-                      isMarkerTick ? 'font-black text-[#dc2626]' : ''
+                      isMarkerTick ? 'font-semibold text-[#dc2626]' : ''
                     }`}
                     style={{ left: `${tickLeftPct}%` }}
                   >
@@ -302,24 +299,24 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
 
             {/* Timeline Track with Overlapping Event Bars */}
             <div 
-              className="relative bg-[#FEFDE6] rounded-lg border-2 border-black p-4 flex flex-col justify-center gap-3 overflow-hidden transition-all duration-200"
+              className="relative bg-[#FEFDE6] rounded-lg border border-[#E8E5BA] p-4 flex flex-col justify-center gap-3 overflow-hidden transition-all duration-200"
               style={{ minHeight: `${Math.max(140, computedEvents.length * 52 + 30)}px` }}
             >
-              {/* Dynamic vertical grid lines at 30-min intervals */}
+              {/* Vertical grid lines at 30-min intervals */}
               <div className="absolute inset-0 pointer-events-none">
                 {ticks.map((tickM, idx) => {
                   const tickLeftPct = ((tickM - scaleStart) / totalSpan) * 100;
                   return (
                     <div
                       key={idx}
-                      className="absolute top-0 bottom-0 w-[1px] bg-black/10"
+                      className="absolute top-0 bottom-0 w-[1px] bg-[#E8E5BA]/40"
                       style={{ left: `${tickLeftPct}%` }}
                     />
                   );
                 })}
               </div>
 
-              {/* Red dashed vertical marker 1 (e.g. 9:30) */}
+              {/* Red dashed vertical marker 1 (Meeting start e.g. 9:30) */}
               {conflict.hasConflict && (
                 <div
                   className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#dc2626] z-20 pointer-events-none transition-all duration-300"
@@ -328,7 +325,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                 />
               )}
 
-              {/* Red dashed vertical marker 2 (e.g. 10:00) */}
+              {/* Red dashed vertical marker 2 (Overlap boundary e.g. 10:00) */}
               {conflict.hasConflict && (
                 <div
                   className="absolute top-0 bottom-0 border-l-2 border-dashed border-[#dc2626] z-20 pointer-events-none transition-all duration-300"
@@ -337,10 +334,10 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                 />
               )}
 
-              {/* Shaded Overlap Region */}
+              {/* Shaded Pale Overlap Region (10:00–10:30) */}
               {conflict.hasConflict && (
                 <div
-                  className="absolute top-0 bottom-0 bg-[#dc2626]/15 z-10 pointer-events-none transition-all duration-300 border-x border-[#dc2626]/30"
+                  className="absolute top-0 bottom-0 bg-[#dc2626]/10 z-10 pointer-events-none transition-all duration-300"
                   style={{
                     left: `${conflict.overlapLeftPct}%`,
                     width: `${conflict.overlapWidthPct}%`
@@ -349,7 +346,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                 />
               )}
 
-              {/* Dynamic Event Bars in Staggered Rows */}
+              {/* Event Bars in Staggered Rows */}
               {computedEvents.map((ev) => (
                 <div key={ev.id} className="relative w-full h-10 z-15">
                   <button
@@ -359,15 +356,15 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                       setActiveMode('reschedule');
                     }}
                     title="Click to reschedule"
-                    className={`absolute h-full rounded font-mono text-xs sm:text-sm font-bold flex items-center px-3.5 shadow-neo-sm tracking-tight transition-all duration-300 truncate text-left cursor-pointer border border-black/60 hover:brightness-105 active:scale-[0.99] ${
+                    className={`absolute h-full rounded font-mono text-xs sm:text-sm font-semibold flex items-center px-3.5 shadow-2xs tracking-tight transition-all duration-300 truncate text-left cursor-pointer hover:brightness-105 active:scale-[0.99] ${
                       ev.color === 'cyan'
                         ? 'bg-[#06b6d4] text-[#0f172a]'
                         : ev.color === 'blue'
                         ? 'bg-[#1d4ed8] text-white'
                         : ev.color === 'amber'
-                        ? 'bg-[#FCE519] text-black font-black'
+                        ? 'bg-[#FAF8DB] border border-[#172D50]/40 text-[#172D50] font-bold'
                         : 'bg-[#10380B] text-[#FEFDE6]'
-                    } ${selectedEventId === ev.id && activeMode === 'reschedule' ? 'ring-3 ring-black' : ''}`}
+                    } ${selectedEventId === ev.id && activeMode === 'reschedule' ? 'ring-2 ring-[#172D50]' : ''}`}
                     style={{
                       left: `${ev.leftPct}%`,
                       width: `${ev.widthPct}%`
@@ -381,7 +378,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
 
             {/* Red Overlap Caption / Conflict Status */}
             <div className="relative mt-4 flex items-center justify-center text-center">
-              <p className={`text-xs sm:text-sm font-mono font-bold transition-all ${
+              <p className={`text-xs sm:text-sm font-mono font-semibold transition-all ${
                 conflict.hasConflict ? 'text-[#dc2626]' : 'text-[#10380B]'
               }`}>
                 {conflict.hasConflict
@@ -390,16 +387,16 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
               </p>
             </div>
 
-            {/* Inline Functional Event Controls (Add Event, Reschedule, Reset) */}
-            <div className="mt-5 pt-3 border-t-2 border-black/20 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-black">
+            {/* Editorial Inline Event Controls */}
+            <div className="mt-5 pt-3 border-t border-[#E8E5BA]/60 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-[#172D50]">
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => setActiveMode(prev => (prev === 'add' ? 'idle' : 'add'))}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 border-2 border-black font-bold transition-colors ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${
                     activeMode === 'add'
-                      ? 'bg-black text-[#FCE519] shadow-neo-sm'
-                      : 'bg-white text-black hover:bg-[#FCE519] shadow-neo-sm'
+                      ? 'bg-[#172D50] text-[#FEFDE6] border-[#172D50]'
+                      : 'bg-[#FEFDE6] border-[#E8E5BA] text-[#172D50] hover:bg-[#F2EE98]/40'
                   }`}
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -408,10 +405,10 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
 
                 <button
                   onClick={() => setActiveMode(prev => (prev === 'reschedule' ? 'idle' : 'reschedule'))}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 border-2 border-black font-bold transition-colors ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${
                     activeMode === 'reschedule'
-                      ? 'bg-black text-[#FCE519] shadow-neo-sm'
-                      : 'bg-white text-black hover:bg-[#FCE519] shadow-neo-sm'
+                      ? 'bg-[#172D50] text-[#FEFDE6] border-[#172D50]'
+                      : 'bg-[#FEFDE6] border-[#E8E5BA] text-[#172D50] hover:bg-[#F2EE98]/40'
                   }`}
                 >
                   <Clock className="w-3.5 h-3.5" />
@@ -428,7 +425,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                     );
                     updateEvents(updated);
                   }}
-                  className="px-2 py-1 border border-black bg-white hover:bg-[#FAF8F0] text-black font-bold text-[11px]"
+                  className="px-2 py-1 rounded text-[11px] bg-[#FEFDE6] border border-[#E8E5BA] hover:bg-[#FAF8DB] text-[#172D50]/80"
                 >
                   9:30 (Overlap)
                 </button>
@@ -442,7 +439,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                     );
                     updateEvents(updated);
                   }}
-                  className="px-2 py-1 border border-black bg-white hover:bg-[#FAF8F0] text-[#10380B] font-bold text-[11px]"
+                  className="px-2 py-1 rounded text-[11px] bg-[#FEFDE6] border border-[#E8E5BA] hover:bg-[#FAF8DB] text-[#10380B] font-medium"
                 >
                   11:00 (Clear)
                 </button>
@@ -451,7 +448,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
               {/* Reset to Original Specimen */}
               <button
                 onClick={handleResetSample}
-                className="inline-flex items-center gap-1 text-[11px] text-black/70 hover:text-black font-bold underline"
+                className="inline-flex items-center gap-1 text-[11px] text-[#172D50]/60 hover:text-[#172D50] hover:underline"
               >
                 <RotateCcw className="w-3 h-3" />
                 <span>Reset Sample</span>
@@ -462,88 +459,88 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
             {activeMode === 'add' && (
               <form
                 onSubmit={handleAddSubmit}
-                className="mt-4 p-3.5 bg-white border-2 border-black shadow-neo flex flex-wrap items-center gap-3 text-xs font-mono"
+                className="mt-4 p-3.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] flex flex-wrap items-center gap-3 text-xs font-mono animate-fade-in"
               >
                 <div className="flex-1 min-w-[120px]">
-                  <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">Title</span>
+                  <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Title</span>
                   <input
                     type="text"
                     value={newTitle}
                     onChange={e => setNewTitle(e.target.value)}
                     placeholder="Title"
-                    className="w-full px-2 py-1 border border-black bg-white text-black"
+                    className="w-full px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50]"
                   />
                 </div>
 
                 <div>
-                  <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">Start</span>
+                  <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Start</span>
                   <input
                     type="text"
                     value={newStartTime}
                     onChange={e => setNewStartTime(e.target.value)}
                     placeholder="09:30"
-                    className="w-20 px-2 py-1 border border-black bg-white text-black"
+                    className="w-20 px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50]"
                   />
                 </div>
 
                 <div>
-                  <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">End</span>
+                  <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">End</span>
                   <input
                     type="text"
                     value={newEndTime}
                     onChange={e => setNewEndTime(e.target.value)}
                     placeholder="10:30"
-                    className="w-20 px-2 py-1 border border-black bg-white text-black"
+                    className="w-20 px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50]"
                   />
                 </div>
 
                 <div>
-                  <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">Color</span>
+                  <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Type</span>
                   <select
                     value={newColor}
                     onChange={e => setNewColor(e.target.value as 'cyan' | 'blue' | 'forest' | 'amber')}
-                    className="px-2 py-1 border border-black bg-white text-black font-bold"
+                    className="px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50]"
                   >
-                    <option value="forest">Forest</option>
-                    <option value="cyan">Cyan</option>
-                    <option value="blue">Blue</option>
-                    <option value="amber">Acid Yellow</option>
+                    <option value="forest">Lecture</option>
+                    <option value="cyan">Meeting</option>
+                    <option value="blue">Course Slot</option>
+                    <option value="amber">Notice Event</option>
                   </select>
                 </div>
 
                 <div className="flex items-center gap-2 pt-4">
                   <button
                     type="submit"
-                    className="px-3 py-1 bg-black text-[#FCE519] font-bold border border-black hover:bg-black/90 cursor-pointer"
+                    className="px-3 py-1 rounded bg-[#10380B] text-[#FEFDE6] font-medium hover:bg-[#1A5413]"
                   >
                     Add
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveMode('idle')}
-                    className="p-1 text-black/60 hover:text-black cursor-pointer"
+                    className="p-1 rounded text-[#172D50]/60 hover:text-[#172D50]"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
                 {formError && (
-                  <div className="w-full text-[#dc2626] text-[11px] font-bold">{formError}</div>
+                  <div className="w-full text-[#dc2626] text-[11px]">{formError}</div>
                 )}
               </form>
             )}
 
             {/* Inline Panel: Reschedule Controls */}
             {activeMode === 'reschedule' && currentSelectedEvent && (
-              <div className="mt-4 p-3.5 bg-white border-2 border-black shadow-neo flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+              <div className="mt-4 p-3.5 rounded-lg bg-[#FEFDE6] border border-[#E8E5BA] flex flex-wrap items-center justify-between gap-3 text-xs font-mono animate-fade-in">
                 <div className="flex flex-wrap items-center gap-3">
                   {/* Event Selector */}
                   <div>
-                    <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">Target Event</span>
+                    <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Target Event</span>
                     <select
                       value={selectedEventId}
                       onChange={e => setSelectedEventId(e.target.value)}
-                      className="px-2 py-1 border border-black bg-white text-black font-bold"
+                      className="px-2 py-1 rounded border border-[#E8E5BA] bg-white text-[#172D50] font-semibold"
                     >
                       {events.map(ev => (
                         <option key={ev.id} value={ev.id}>
@@ -555,19 +552,19 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
 
                   {/* Step Shift Buttons */}
                   <div>
-                    <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">Quick Shift</span>
+                    <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Quick Shift</span>
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
                         onClick={() => handleTimeShift(-15)}
-                        className="px-2 py-1 border border-black bg-[#FEFDE6] hover:bg-[#FCE519] font-bold"
+                        className="px-2 py-1 rounded bg-[#FAF8DB] border border-[#E8E5BA] hover:bg-[#F2EE98]/40"
                       >
                         -15m
                       </button>
                       <button
                         type="button"
                         onClick={() => handleTimeShift(15)}
-                        className="px-2 py-1 border border-black bg-[#FEFDE6] hover:bg-[#FCE519] font-bold"
+                        className="px-2 py-1 rounded bg-[#FAF8DB] border border-[#E8E5BA] hover:bg-[#F2EE98]/40"
                       >
                         +15m
                       </button>
@@ -576,7 +573,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
 
                   {/* Manual time adjust */}
                   <div>
-                    <span className="text-[10px] text-black/70 uppercase block mb-1 font-bold">Times</span>
+                    <span className="text-[10px] text-[#172D50]/60 uppercase block mb-1">Times</span>
                     <div className="flex items-center gap-1.5">
                       <input
                         type="text"
@@ -584,7 +581,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                         onChange={e =>
                           handleUpdateSelectedTimes(e.target.value, currentSelectedEvent.endTime)
                         }
-                        className="w-16 px-1.5 py-1 border border-black bg-white text-center font-bold"
+                        className="w-16 px-1.5 py-1 rounded border border-[#E8E5BA] bg-white text-center"
                       />
                       <span>–</span>
                       <input
@@ -593,7 +590,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                         onChange={e =>
                           handleUpdateSelectedTimes(currentSelectedEvent.startTime, e.target.value)
                         }
-                        className="w-16 px-1.5 py-1 border border-black bg-white text-center font-bold"
+                        className="w-16 px-1.5 py-1 rounded border border-[#E8E5BA] bg-white text-center"
                       />
                     </div>
                   </div>
@@ -604,7 +601,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                     <button
                       type="button"
                       onClick={() => handleDeleteEvent(currentSelectedEvent.id)}
-                      className="p-1.5 border border-[#dc2626] text-[#dc2626] hover:bg-[#FFF0F0]"
+                      className="p-1.5 rounded text-[#dc2626] hover:bg-[#FFF3E0]"
                       title="Remove event"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -613,7 +610,7 @@ export const TimelineCalendar: React.FC<TimelineCalendarProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveMode('idle')}
-                    className="px-3 py-1 bg-black text-[#FEFDE6] inline-flex items-center gap-1 font-bold"
+                    className="px-3 py-1 rounded bg-[#172D50] text-[#FEFDE6] inline-flex items-center gap-1"
                   >
                     <Check className="w-3.5 h-3.5" />
                     <span>Done</span>

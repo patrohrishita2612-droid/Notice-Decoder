@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Eye, EyeOff, Sparkles, Check, ArrowRight, AlertCircle } from 'lucide-react';
+import { ScrollProgressIndicator } from './ScrollProgressIndicator';
+import { ScrollWordReveal } from './ScrollWordReveal';
+import { ScrollCurvedJourney } from './ScrollCurvedJourney';
+import { TrustReliabilitySection } from './TrustReliabilitySection';
+import { Footer } from './Footer';
+import { 
+  ArrowRight, Lock, Mail, Key, Check, AlertCircle, 
+  Eye, EyeOff, ShieldCheck, CheckCircle2 
+} from 'lucide-react';
 
 export const PublicLanding: React.FC = () => {
   const { login, register, resetPassword, oauthLogin } = useAuth();
@@ -21,7 +29,7 @@ export const PublicLanding: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Quick fill helper for demo/evaluation
+  // Quick fill helper for evaluation
   const handleQuickFill = (demoEmail: string, demoPass: string) => {
     setEmail(demoEmail);
     setPassword(demoPass);
@@ -55,7 +63,7 @@ export const PublicLanding: React.FC = () => {
         if (!res.success) {
           setErrorMessage(res.error || 'Failed to reset password.');
         } else {
-          setSuccessMessage('Password reset successfully. You can now sign in.');
+          setSuccessMessage('Password reset instructions processed. You can now sign in.');
           setAuthMode('login');
         }
       }
@@ -76,508 +84,440 @@ export const PublicLanding: React.FC = () => {
     setIsSubmitting(false);
   };
 
-  const scrollToLogin = () => {
-    const card = document.getElementById('login-card-container');
-    if (card) {
-      card.scrollIntoView({ behavior: 'smooth' });
-      const emailInput = document.getElementById('auth-email-input');
+  const scrollToAuth = () => {
+    const el = document.getElementById('campus-auth-portal');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+      const emailInput = document.getElementById('portal-email-input');
       if (emailInput) emailInput.focus();
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#FEFDE6] text-black font-sans selection:bg-[#FCE519] selection:text-black">
-      {/* 1. STICKY NEOBRUTALIST NAVIGATION */}
-      <header className="sticky top-0 z-40 bg-[#FEFDE6] border-b-[2.5px] border-black">
-        <div className="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
-          {/* Logo & Wordmark */}
+    <div className="min-h-screen bg-[#FEFDE6] text-[#172D50] selection:bg-[#F2EE98] selection:text-[#172D50] font-sans relative">
+      {/* 1. Signature Interaction: Live Document Scroll Progress Indicator */}
+      <ScrollProgressIndicator />
+
+      {/* 2. Editorial Navigation Bar */}
+      <header className="sticky top-0 z-30 w-full bg-[#FEFDE6]/90 backdrop-blur-md border-b border-[#E8E5BA]/70 transition-all">
+        <div className="max-w-6xl mx-auto px-6 h-16 md:h-20 flex items-center justify-between">
+          {/* Logo & Brand Identity */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-black text-[#FCE519] flex items-center justify-center font-mono font-black text-base border-2 border-black shadow-neo-sm">
+            <div className="w-8 h-8 rounded-lg bg-[#172D50] flex items-center justify-center text-[#F2EE98] font-mono font-bold text-sm shadow-xs">
               ND
             </div>
             <div>
-              <span className="font-heading text-xl md:text-2xl font-black tracking-tight block leading-none">
+              <span className="font-serif font-bold text-lg md:text-xl text-[#172D50] tracking-tight">
                 Notice Decoder
               </span>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-black/70 font-bold">
+              <span className="hidden sm:inline-block ml-2 text-[10px] font-mono uppercase tracking-widest text-[#172D50]/60 px-1.5 py-0.5 rounded bg-[#FAF8DB] border border-[#E8E5BA]">
                 Team CodeBlooded
               </span>
             </div>
           </div>
 
-          {/* Links & Sign In Action */}
-          <nav className="flex items-center gap-6 md:gap-8">
-            <div className="hidden md:flex items-center gap-6 text-sm font-bold font-mono">
-              <a href="#features" className="hover:text-[#dc2626] transition-colors underline-offset-4 hover:underline">
-                Features
-              </a>
-              <a href="#how-it-works" className="hover:text-[#dc2626] transition-colors underline-offset-4 hover:underline">
-                How It Works
-              </a>
-              <a href="#about" className="hover:text-[#dc2626] transition-colors underline-offset-4 hover:underline">
-                About
-              </a>
+          {/* Navigation Links & Action */}
+          <nav className="flex items-center gap-4 md:gap-8">
+            <div className="hidden md:flex items-center gap-6 text-sm font-medium text-[#172D50]/80">
+              <a href="#how-it-works" className="hover:text-[#E65100] transition-colors">How It Works</a>
+              <a href="#safeguards" className="hover:text-[#E65100] transition-colors">Integrity Safeguards</a>
+              <a href="#campus-auth-portal" className="hover:text-[#E65100] transition-colors">Access Portal</a>
             </div>
 
             <button
-              onClick={scrollToLogin}
-              className="btn-neo px-4 py-2 bg-[#FCE519] hover:bg-[#EEDB07] font-heading font-black text-xs md:text-sm uppercase tracking-wider"
+              onClick={scrollToAuth}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-all text-sm font-medium shadow-xs hover:shadow-sm"
             >
-              Sign In
+              <Lock className="w-3.5 h-3.5 text-[#F2EE98]" />
+              <span>Sign In / Enter App</span>
+              <ArrowRight className="w-3.5 h-3.5 text-[#FEFDE6]/70 hidden sm:inline" />
             </button>
           </nav>
         </div>
       </header>
 
-      {/* 2. SCROLLING MARQUEE (Continuous loop) */}
-      <div className="w-full bg-[#FCE519] border-b-[2.5px] border-black py-2.5 overflow-hidden select-none">
-        <div className="animate-marquee font-mono font-black text-xs md:text-sm tracking-widest uppercase text-black">
-          <span className="mx-4">DECODE NOTICES ✳ TRACK DEADLINES ✳ AVOID CONFLICTS ✳ STAY AHEAD ✳</span>
-          <span className="mx-4">DECODE NOTICES ✳ TRACK DEADLINES ✳ AVOID CONFLICTS ✳ STAY AHEAD ✳</span>
-          <span className="mx-4">DECODE NOTICES ✳ TRACK DEADLINES ✳ AVOID CONFLICTS ✳ STAY AHEAD ✳</span>
-          <span className="mx-4">DECODE NOTICES ✳ TRACK DEADLINES ✳ AVOID CONFLICTS ✳ STAY AHEAD ✳</span>
-        </div>
-      </div>
+      {/* 3. Hero Section (Original Editorial Style) */}
+      <section className="relative pt-12 md:pt-20 pb-20 md:pb-28 px-6 md:px-12 bg-[#FEFDE6] overflow-hidden">
+        <div className="max-w-6xl mx-auto">
+          {/* Badging */}
+          <div className="flex flex-wrap items-center gap-3 mb-6">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono text-[#172D50] tracking-wide">
+              <span className="w-2 h-2 rounded-full bg-[#10380B] animate-pulse"></span>
+              Academic Notice Intelligence
+            </span>
+            <span className="text-xs font-mono text-[#172D50]/60">PS02 · Team CodeBlooded</span>
+          </div>
 
-      {/* 3. HERO & LOGIN TWO-COLUMN SECTION */}
-      <main className="max-w-7xl mx-auto px-6 py-12 md:py-20">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-          
-          {/* LEFT COLUMN: HERO MARKETING */}
-          <div className="lg:col-span-7 space-y-8">
-            {/* Tag badge */}
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-black text-[#FCE519] border-2 border-black font-mono text-xs font-bold uppercase tracking-wider shadow-neo-sm">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Academic Notice Intelligence · PS02</span>
-            </div>
-
-            {/* Oversized Neobrutalist Headline */}
-            <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-[1.02] tracking-tighter uppercase text-black">
-              <span className="bg-[#FCE519] px-2 py-0.5 border-2 border-black inline-block shadow-neo-sm transform -rotate-1 mb-2">
-                Decode
-              </span>{' '}
-              The Notice.<br />
-              Organize The{' '}
-              <span className="bg-[#FCE519] px-2 py-0.5 border-2 border-black inline-block shadow-neo-sm transform rotate-1 mt-2">
-                Chaos.
-              </span>
+          {/* Headline & Editorial Copy */}
+          <div className="max-w-3xl mb-10">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-serif font-semibold text-[#172D50] leading-[1.08] tracking-tight">
+              College notices.<br />
+              <span className="italic font-normal text-[#172D50]/80">Minus the confusion.</span>
             </h1>
-
-            {/* Supporting Copy */}
-            <p className="text-base sm:text-lg text-black/85 leading-relaxed font-medium max-w-xl">
-              College notices hide important dates, deadlines, and actions in lengthy paragraphs. Notice Decoder turns them into clear information and a schedule you can act on.
+            <p className="mt-6 text-lg sm:text-xl text-[#172D50]/75 leading-relaxed font-sans max-w-2xl">
+              Turn lengthy academic notices into clear summaries, important deadlines, calendar events, and smarter schedules.
             </p>
 
-            {/* Compact Black Stats-Style Workflow Strip */}
-            <div className="p-3 bg-black text-[#FEFDE6] border-[2.5px] border-black shadow-neo font-mono text-xs md:text-sm font-bold tracking-wider flex items-center justify-between overflow-x-auto">
-              <span>EXTRACT</span>
-              <span className="text-[#FCE519]">→</span>
-              <span>ORGANIZE</span>
-              <span className="text-[#FCE519]">→</span>
-              <span>SCHEDULE</span>
-              <span className="text-[#FCE519]">→</span>
-              <span className="text-[#FCE519] underline">ACT</span>
-            </div>
+            {/* Action CTAs */}
+            <div className="mt-8 flex flex-wrap items-center gap-4">
+              <button
+                onClick={scrollToAuth}
+                className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-all font-medium text-base shadow-sm hover:shadow"
+              >
+                <span>Enter Protected Workspace</span>
+                <ArrowRight className="w-4 h-4 text-[#F2EE98]" />
+              </button>
 
-            {/* Restrained 2 x 2 Feature Grid */}
-            <div id="features" className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div className="p-4 bg-[#FAF8F0] border-2 border-black shadow-neo-sm">
-                <div className="w-8 h-8 rounded-none bg-black text-[#FCE519] flex items-center justify-center font-mono font-bold text-xs mb-3 border border-black">
-                  01
-                </div>
-                <h3 className="font-heading font-black text-base text-black mb-1 uppercase">
-                  Smart Extraction
-                </h3>
-                <p className="text-xs text-black/80 font-medium leading-relaxed">
-                  Identify dates, deadlines, locations, and action items from complex circulars.
-                </p>
-              </div>
-
-              <div className="p-4 bg-[#FAF8F0] border-2 border-black shadow-neo-sm">
-                <div className="w-8 h-8 rounded-none bg-black text-[#FCE519] flex items-center justify-center font-mono font-bold text-xs mb-3 border border-black">
-                  02
-                </div>
-                <h3 className="font-heading font-black text-base text-black mb-1 uppercase">
-                  Clear Summaries
-                </h3>
-                <p className="text-xs text-black/80 font-medium leading-relaxed">
-                  Turn lengthy institutional notices into plain-language readable takeaways.
-                </p>
-              </div>
-
-              <div className="p-4 bg-[#FAF8F0] border-2 border-black shadow-neo-sm">
-                <div className="w-8 h-8 rounded-none bg-black text-[#FCE519] flex items-center justify-center font-mono font-bold text-xs mb-3 border border-black">
-                  03
-                </div>
-                <h3 className="font-heading font-black text-base text-black mb-1 uppercase">
-                  Smart Calendar
-                </h3>
-                <p className="text-xs text-black/80 font-medium leading-relaxed">
-                  Automatically synchronize decoded notice events directly into your schedule.
-                </p>
-              </div>
-
-              <div className="p-4 bg-[#FAF8F0] border-2 border-black shadow-neo-sm">
-                <div className="w-8 h-8 rounded-none bg-black text-[#FCE519] flex items-center justify-center font-mono font-bold text-xs mb-3 border border-black">
-                  04
-                </div>
-                <h3 className="font-heading font-black text-base text-black mb-1 uppercase">
-                  Conflict Detection
-                </h3>
-                <p className="text-xs text-black/80 font-medium leading-relaxed">
-                  Identify full-duration timetable clashes and suggest clean alternative slots.
-                </p>
-              </div>
+              <a
+                href="#how-it-works"
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg bg-[#FAF8DB] text-[#172D50] hover:bg-[#F2EE98]/40 border border-[#E8E5BA] transition-all font-medium text-base"
+              >
+                <span>See How It Works</span>
+              </a>
             </div>
           </div>
 
-          {/* RIGHT COLUMN: NEOBRUTALIST AUTHENTICATION CARD */}
-          <div id="login-card-container" className="lg:col-span-5">
-            <div className="bg-[#FAF8F0] border-[2.5px] border-black shadow-neo-lg relative p-6 sm:p-8">
-              
-              {/* Corner Tab */}
-              <div className="absolute -top-3.5 left-6 bg-black text-[#FCE519] px-3 py-0.5 border-2 border-black font-mono font-black text-xs uppercase tracking-wider shadow-neo-sm">
-                / {authMode === 'login' ? 'login' : authMode === 'register' ? 'create account' : 'recovery'}
-              </div>
+          {/* Authentic Visual Specimen: Raw Notice transforming into Extracted Intelligence */}
+          <div className="mt-14 pt-8 border-t border-[#E8E5BA]/60">
+            <div className="text-xs font-mono uppercase tracking-wider text-[#172D50]/60 mb-4 flex items-center justify-between">
+              <span>Visual Transformation Specimen</span>
+              <span className="text-[#E65100]">Authentic Circular Sample</span>
+            </div>
 
-              {/* Card Header */}
-              <div className="mb-6 pt-2">
-                <h2 className="font-heading text-2xl sm:text-3xl font-black uppercase text-black">
-                  {authMode === 'login' && 'Sign in to Notice Decoder'}
-                  {authMode === 'register' && 'Create Your Account'}
-                  {authMode === 'forgot' && 'Reset Account Password'}
-                </h2>
-                <p className="text-xs text-black/70 font-mono mt-1">
-                  {authMode === 'login' && 'Enter your credentials to access your protected workspace.'}
-                  {authMode === 'register' && 'Register your university profile to organize notices.'}
-                  {authMode === 'forgot' && 'Enter your email and new password to recover access.'}
-                </p>
-              </div>
-
-              {/* Feedback Alerts */}
-              {errorMessage && (
-                <div className="mb-5 p-3 bg-[#FFF0F0] border-2 border-[#dc2626] font-mono text-xs text-[#dc2626] flex items-start gap-2 shadow-neo-sm">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{errorMessage}</span>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+              {/* Left Column: Believable Raw Notice */}
+              <div className="lg:col-span-5 bg-[#FAF8DB] border border-[#E8E5BA] rounded-xl p-6 relative font-mono text-xs text-[#172D50]/80 flex flex-col justify-between shadow-xs">
+                <div className="absolute top-3 right-3 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-[#E8E5BA]/60 text-[#172D50]/70">
+                  Raw Circular / PDF
                 </div>
-              )}
 
-              {successMessage && (
-                <div className="mb-5 p-3 bg-[#EAFBEA] border-2 border-[#10380B] font-mono text-xs text-[#10380B] flex items-start gap-2 shadow-neo-sm">
-                  <Check className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{successMessage}</span>
-                </div>
-              )}
-
-              {/* Auth Form */}
-              <form onSubmit={handleSubmit} className="space-y-4">
-                
-                {/* Name field (Register only) */}
-                {authMode === 'register' && (
-                  <div>
-                    <label className="font-mono text-xs font-bold uppercase text-black block mb-1">
-                      Full Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={name}
-                      onChange={e => setName(e.target.value)}
-                      placeholder="e.g. Kavya Rane"
-                      className="w-full px-3 py-2.5 bg-white border-2 border-black font-mono text-xs text-black focus:outline-none focus:bg-[#FEFDE6] shadow-neo-sm"
-                    />
-                  </div>
-                )}
-
-                {/* Email field */}
                 <div>
-                  <label className="font-mono text-xs font-bold uppercase text-black block mb-1">
-                    Email Address
+                  <div className="border-b border-[#E8E5BA] pb-3 mb-4">
+                    <div className="font-bold text-[#172D50] uppercase text-xs">Department of Computer Engineering</div>
+                    <div className="text-[11px] text-[#172D50]/60">Circular Ref: CE/2026/NOV-14 · Date: Nov 05, 2026</div>
+                  </div>
+
+                  <p className="leading-relaxed mb-3 text-[12px] font-sans text-[#172D50]/90">
+                    All third-year students (Batch 2024-2028) are hereby informed that <span className="bg-[#F2EE98] px-1 font-semibold text-[#172D50]">Internal Test 2 for CSA</span> is scheduled on <span className="bg-[#F2EE98] px-1 font-semibold text-[#172D50]">13 November 2026</span> from <span className="bg-[#F2EE98] px-1 font-semibold text-[#172D50]">10:00 AM to 11:30 AM</span> in Examination Hall Room 204.
+                  </p>
+                  <p className="leading-relaxed text-[12px] font-sans text-[#172D50]/90">
+                    Practical records must be deposited to the office <span className="bg-[#FFF3E0] text-[#E65100] px-1 font-semibold">no later than 12:00 noon</span> on the same day. Seating for Roll Nos 45–60 is tentatively shifted to Room 206 pending electrical clearance...
+                  </p>
+                </div>
+
+                <div className="mt-6 pt-3 border-t border-[#E8E5BA] flex items-center justify-between text-[11px] text-[#172D50]/60">
+                  <span>Format: Unstructured Text</span>
+                  <span className="text-[#E65100]">2 buried deadlines flagged</span>
+                </div>
+              </div>
+
+              {/* Middle Divider / Transformation Indicator (Desktop) */}
+              <div className="hidden lg:flex lg:col-span-1 items-center justify-center">
+                <div className="w-9 h-9 rounded-full bg-[#172D50] text-[#F2EE98] flex items-center justify-center shadow-xs">
+                  <ArrowRight className="w-4 h-4" />
+                </div>
+              </div>
+
+              {/* Right Column: Clean Extracted Intelligence & Action Items */}
+              <div className="lg:col-span-6 bg-[#FEFDE6] border border-[#172D50]/20 rounded-xl p-6 flex flex-col justify-between shadow-xs">
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[#10380B]"></span>
+                      <span className="text-xs font-mono uppercase tracking-wider text-[#10380B] font-semibold">
+                        Notice Decoder Output
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono text-[#172D50]/60 bg-[#FAF8DB] px-2 py-0.5 rounded border border-[#E8E5BA]">
+                      Structured Schema
+                    </span>
+                  </div>
+
+                  <h3 className="text-lg font-serif font-bold text-[#172D50]">Internal Test 2 (CSA)</h3>
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs font-mono">
+                    <div className="p-2.5 rounded bg-[#FAF8DB]/80 border border-[#E8E5BA]">
+                      <span className="text-[#172D50]/60 block text-[10px]">TIME & VENUE</span>
+                      <span className="font-semibold text-[#172D50]">10:00–11:30 AM · Room 204</span>
+                    </div>
+                    <div className="p-2.5 rounded bg-[#FAF8DB]/80 border border-[#E8E5BA]">
+                      <span className="text-[#172D50]/60 block text-[10px]">MANDATORY DEADLINE</span>
+                      <span className="font-semibold text-[#E65100]">12:00 Noon (Practical Records)</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 p-3 rounded bg-[#FFF3E0]/70 border border-[#FFE0B2] text-xs font-sans text-[#E65100]">
+                    <strong>Flagged Uncertainty:</strong> Roll Nos 45–60 tentatively shifted to Room 206. Verification required on notice board.
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-3 border-t border-[#E8E5BA] flex items-center justify-between text-xs font-mono text-[#10380B]">
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Auto-synced with calendar
+                  </span>
+                  <span className="text-[#172D50]/60">Conflict engine active</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Signature Interaction: Word-by-Word Scroll-Triggered Text Reveal */}
+      <ScrollWordReveal />
+
+      {/* 5. Signature Interaction: Scroll-Driven Curved SVG Stroke Journey */}
+      <div id="how-it-works">
+        <ScrollCurvedJourney />
+      </div>
+
+      {/* 6. Authentic Campus Authentication Portal (Editorial Card) */}
+      <section id="campus-auth-portal" className="py-24 md:py-32 px-6 md:px-12 bg-[#FAF8DB]/60 border-t border-[#E8E5BA]">
+        <div className="max-w-xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono tracking-wider text-[#10380B] uppercase mb-3">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Campus Security & Access</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-serif font-semibold text-[#172D50]">
+              Access Your Workspace
+            </h2>
+            <p className="mt-2 text-sm text-[#172D50]/70 font-sans">
+              Sign in with your campus credentials to decode notices, manage schedules, and resolve conflicts.
+            </p>
+          </div>
+
+          {/* Editorial Auth Card */}
+          <div className="bg-[#FEFDE6] border border-[#E8E5BA] rounded-2xl p-6 sm:p-8 shadow-sm">
+            {/* Mode Switcher Tabs */}
+            <div className="flex rounded-lg bg-[#FAF8DB] p-1 border border-[#E8E5BA] mb-6">
+              <button
+                type="button"
+                onClick={() => { setAuthMode('login'); setErrorMessage(''); setSuccessMessage(''); }}
+                className={`flex-1 py-2 text-xs font-mono font-medium rounded-md transition-all ${
+                  authMode === 'login'
+                    ? 'bg-[#172D50] text-[#FEFDE6] shadow-2xs'
+                    : 'text-[#172D50]/70 hover:text-[#172D50]'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthMode('register'); setErrorMessage(''); setSuccessMessage(''); }}
+                className={`flex-1 py-2 text-xs font-mono font-medium rounded-md transition-all ${
+                  authMode === 'register'
+                    ? 'bg-[#172D50] text-[#FEFDE6] shadow-2xs'
+                    : 'text-[#172D50]/70 hover:text-[#172D50]'
+                }`}
+              >
+                Create Account
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthMode('forgot'); setErrorMessage(''); setSuccessMessage(''); }}
+                className={`flex-1 py-2 text-xs font-mono font-medium rounded-md transition-all ${
+                  authMode === 'forgot'
+                    ? 'bg-[#172D50] text-[#FEFDE6] shadow-2xs'
+                    : 'text-[#172D50]/70 hover:text-[#172D50]'
+                }`}
+              >
+                Reset Password
+              </button>
+            </div>
+
+            {/* Quick Demo Credentials Autofill Banner */}
+            <div className="mb-6 p-3 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] flex items-center justify-between text-xs font-mono">
+              <div>
+                <span className="text-[#172D50]/60 block text-[10px]">DEMO EVALUATION ACCOUNT</span>
+                <span className="font-medium text-[#172D50]">student@campus.edu</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleQuickFill('student@campus.edu', 'campus2026')}
+                className="px-2.5 py-1 rounded bg-[#172D50] text-[#F2EE98] hover:bg-[#244270] transition-colors text-[11px] font-medium"
+              >
+                1-Click Autofill
+              </button>
+            </div>
+
+            {/* Error Message */}
+            {errorMessage && (
+              <div className="mb-4 p-3 rounded-lg bg-[#FFF0F0] border border-[#FCA5A5] text-[#B91C1C] text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {/* Success Message */}
+            {successMessage && (
+              <div className="mb-4 p-3 rounded-lg bg-[#F0FDF4] border border-[#86EFAC] text-[#15803D] text-xs flex items-center gap-2">
+                <Check className="w-4 h-4 shrink-0" />
+                <span>{successMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {authMode === 'register' && (
+                <div>
+                  <label className="block text-xs font-mono font-medium text-[#172D50] mb-1">
+                    Full Name
                   </label>
                   <input
-                    id="auth-email-input"
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Alex Morgan"
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-[#FAF8DB]/50 border border-[#E8E5BA] text-sm text-[#172D50] placeholder-[#172D50]/40 focus:outline-hidden focus:border-[#172D50] focus:ring-1 focus:ring-[#172D50] transition-all font-sans"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-mono font-medium text-[#172D50] mb-1">
+                  Campus Email Address
+                </label>
+                <div className="relative">
+                  <input
+                    id="portal-email-input"
                     type="email"
                     required
                     value={email}
-                    onChange={e => setEmail(e.target.value)}
+                    onChange={(e) => setEmail(e.target.value)}
                     placeholder="student@campus.edu"
-                    className="w-full px-3 py-2.5 bg-white border-2 border-black font-mono text-xs text-black focus:outline-none focus:bg-[#FEFDE6] shadow-neo-sm"
+                    className="w-full pl-9 pr-3.5 py-2.5 rounded-lg bg-[#FAF8DB]/50 border border-[#E8E5BA] text-sm text-[#172D50] placeholder-[#172D50]/40 focus:outline-hidden focus:border-[#172D50] focus:ring-1 focus:ring-[#172D50] transition-all font-sans"
+                  />
+                  <Mail className="w-4 h-4 text-[#172D50]/40 absolute left-3 top-3" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono font-medium text-[#172D50] mb-1">
+                  {authMode === 'forgot' ? 'New Password' : 'Password'}
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-9 pr-10 py-2.5 rounded-lg bg-[#FAF8DB]/50 border border-[#E8E5BA] text-sm text-[#172D50] placeholder-[#172D50]/40 focus:outline-hidden focus:border-[#172D50] focus:ring-1 focus:ring-[#172D50] transition-all font-sans"
+                  />
+                  <Key className="w-4 h-4 text-[#172D50]/40 absolute left-3 top-3" />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-3 text-[#172D50]/40 hover:text-[#172D50] transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {authMode === 'register' && (
+                <div>
+                  <label className="block text-xs font-mono font-medium text-[#172D50] mb-1">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-[#FAF8DB]/50 border border-[#E8E5BA] text-sm text-[#172D50] placeholder-[#172D50]/40 focus:outline-hidden focus:border-[#172D50] focus:ring-1 focus:ring-[#172D50] transition-all font-sans"
                   />
                 </div>
+              )}
 
-                {/* Password field */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="font-mono text-xs font-bold uppercase text-black">
-                      {authMode === 'forgot' ? 'New Password' : 'Password'}
-                    </label>
-                    {authMode === 'login' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthMode('forgot');
-                          setErrorMessage('');
-                        }}
-                        className="text-[11px] font-mono text-black/70 hover:text-black underline font-semibold"
-                      >
-                        Forgot password?
-                      </button>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full px-3 py-2.5 bg-white border-2 border-black font-mono text-xs text-black focus:outline-none focus:bg-[#FEFDE6] shadow-neo-sm pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-black/60 hover:text-black"
-                      tabIndex={-1}
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Confirm Password (Register only) */}
-                {authMode === 'register' && (
-                  <div>
-                    <label className="font-mono text-xs font-bold uppercase text-black block mb-1">
-                      Confirm Password
-                    </label>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full px-3 py-2.5 bg-white border-2 border-black font-mono text-xs text-black focus:outline-none focus:bg-[#FEFDE6] shadow-neo-sm"
-                    />
-                  </div>
-                )}
-
-                {/* Keep me signed in Checkbox */}
-                {authMode === 'login' && (
-                  <div className="flex items-center gap-2 pt-1">
+              {authMode === 'login' && (
+                <div className="flex items-center justify-between text-xs font-mono pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-[#172D50]/80">
                     <input
                       type="checkbox"
-                      id="keep-signed-in"
                       checked={keepMeSignedIn}
-                      onChange={e => setKeepMeSignedIn(e.target.checked)}
-                      className="w-4 h-4 rounded-none border-2 border-black accent-black cursor-pointer"
+                      onChange={(e) => setKeepMeSignedIn(e.target.checked)}
+                      className="rounded border-[#E8E5BA] text-[#172D50] focus:ring-0 cursor-pointer"
                     />
-                    <label htmlFor="keep-signed-in" className="text-xs font-mono text-black/80 cursor-pointer font-medium select-none">
-                      Keep me signed in on this device
-                    </label>
-                  </div>
-                )}
-
-                {/* Primary Acid Yellow Sign In / Submit Button */}
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full mt-2 btn-neo py-3.5 px-4 bg-[#FCE519] hover:bg-[#EEDB07] font-heading font-black text-sm uppercase tracking-wider text-black flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
-                >
-                  <span>
-                    {isSubmitting
-                      ? 'Authenticating...'
-                      : authMode === 'login'
-                      ? 'Sign In →'
-                      : authMode === 'register'
-                      ? 'Create Account →'
-                      : 'Reset Password →'}
-                  </span>
-                </button>
-              </form>
-
-              {/* OAuth Providers */}
-              <div className="mt-6 pt-5 border-t-2 border-black">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-black/60 block text-center mb-3">
-                  Or Connect with Campus SSO
-                </span>
-                <div className="grid grid-cols-2 gap-3">
+                    <span>Remember me</span>
+                  </label>
                   <button
                     type="button"
-                    onClick={() => handleOAuth('google')}
-                    className="btn-neo py-2 px-3 bg-white font-mono text-xs font-bold text-black flex items-center justify-center gap-2 hover:bg-[#FAF8F0]"
+                    onClick={() => setAuthMode('forgot')}
+                    className="text-[#E65100] hover:underline"
                   >
-                    <span>Google SSO</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleOAuth('github')}
-                    className="btn-neo py-2 px-3 bg-white font-mono text-xs font-bold text-black flex items-center justify-center gap-2 hover:bg-[#FAF8F0]"
-                  >
-                    <span>GitHub Edu</span>
+                    Forgot password?
                   </button>
                 </div>
-              </div>
+              )}
 
-              {/* Quick Fill Preloaded Credentials for Evaluation */}
-              <div className="mt-5 p-2.5 bg-[#FEFDE6] border border-black/30 font-mono text-[11px] text-black/80 flex items-center justify-between">
-                <span>Demo account:</span>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-3 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-all font-medium text-sm shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                {isSubmitting ? (
+                  <span>Authenticating...</span>
+                ) : authMode === 'login' ? (
+                  <>
+                    <span>Sign In to Notice Decoder</span>
+                    <ArrowRight className="w-4 h-4 text-[#F2EE98]" />
+                  </>
+                ) : authMode === 'register' ? (
+                  <>
+                    <span>Create Account & Continue</span>
+                    <ArrowRight className="w-4 h-4 text-[#F2EE98]" />
+                  </>
+                ) : (
+                  <>
+                    <span>Reset Password</span>
+                    <ArrowRight className="w-4 h-4 text-[#F2EE98]" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Social / SSO Alternative */}
+            <div className="mt-6 pt-5 border-t border-[#E8E5BA]/60 text-center">
+              <span className="text-[11px] font-mono text-[#172D50]/50 block mb-3 uppercase tracking-wider">
+                Or Continue With Campus SSO
+              </span>
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => handleQuickFill('student@campus.edu', 'campus2026')}
-                  className="font-bold underline hover:text-[#dc2626]"
+                  onClick={() => handleOAuth('google')}
+                  disabled={isSubmitting}
+                  className="px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono text-[#172D50] hover:bg-[#F2EE98]/30 transition-colors flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  student@campus.edu (fill)
+                  <span className="font-bold">G</span>
+                  <span>Google Workspace</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOAuth('github')}
+                  disabled={isSubmitting}
+                  className="px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono text-[#172D50] hover:bg-[#F2EE98]/30 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span className="font-bold">GH</span>
+                  <span>GitHub Campus</span>
                 </button>
               </div>
-
-              {/* Footer Switcher */}
-              <div className="mt-5 pt-3 border-t border-black/20 text-center text-xs font-mono">
-                {authMode === 'login' ? (
-                  <span>
-                    Need an account?{' '}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthMode('register');
-                        setErrorMessage('');
-                      }}
-                      className="font-bold underline hover:text-[#dc2626]"
-                    >
-                      Create account
-                    </button>
-                  </span>
-                ) : (
-                  <span>
-                    Already have an account?{' '}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthMode('login');
-                        setErrorMessage('');
-                      }}
-                      className="font-bold underline hover:text-[#dc2626]"
-                    >
-                      Sign in here
-                    </button>
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {/* 4. TRUST BAR */}
-      <section className="w-full bg-black text-[#FEFDE6] border-y-[2.5px] border-black py-4 px-6 select-none">
-        <div className="max-w-7xl mx-auto flex items-center justify-center text-center font-mono font-black text-xs md:text-sm tracking-widest uppercase">
-          CLEAR INFORMATION. SMARTER SCHEDULING. FEWER CLASHES.
-        </div>
-      </section>
-
-      {/* 5. HOW IT WORKS 3-STEP SECTION */}
-      <section id="how-it-works" className="py-20 md:py-28 px-6 max-w-7xl mx-auto">
-        <div className="text-center max-w-2xl mx-auto mb-16">
-          <div className="inline-block px-3 py-1 bg-[#FCE519] border-2 border-black font-mono text-xs font-bold uppercase mb-4 shadow-neo-sm">
-            Core Workflow
-          </div>
-          <h2 className="font-heading text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight text-black">
-            How Notice Decoder Works
-          </h2>
-          <p className="mt-3 text-sm font-mono text-black/70">
-            Three direct steps from raw circular text to a conflict-free student calendar.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Step 1 */}
-          <div className="bg-[#FAF8F0] border-[2.5px] border-black p-6 shadow-neo flex flex-col justify-between">
-            <div>
-              <div className="w-12 h-12 bg-black text-[#FCE519] border-2 border-black flex items-center justify-center font-mono font-black text-lg mb-4 shadow-neo-sm">
-                01
-              </div>
-              <h3 className="font-heading text-2xl font-black uppercase text-black mb-2">
-                1. Upload
-              </h3>
-              <p className="text-sm font-medium text-black/80 leading-relaxed font-sans">
-                Paste any unstructured notice text, department circular, or exam announcement.
-              </p>
-            </div>
-            <div className="mt-6 pt-3 border-t border-black/20 text-xs font-mono text-black/60 font-bold uppercase">
-              Sanitized Text & PDF
-            </div>
-          </div>
-
-          {/* Step 2 */}
-          <div className="bg-[#FAF8F0] border-[2.5px] border-black p-6 shadow-neo flex flex-col justify-between">
-            <div>
-              <div className="w-12 h-12 bg-[#FCE519] text-black border-2 border-black flex items-center justify-center font-mono font-black text-lg mb-4 shadow-neo-sm">
-                02
-              </div>
-              <h3 className="font-heading text-2xl font-black uppercase text-black mb-2">
-                2. Decode
-              </h3>
-              <p className="text-sm font-medium text-black/80 leading-relaxed font-sans">
-                Extract event titles, dates, hours, venues, and deadlines. Missing details are flagged for review.
-              </p>
-            </div>
-            <div className="mt-6 pt-3 border-t border-black/20 text-xs font-mono text-black/60 font-bold uppercase">
-              Explainable AI Schema
-            </div>
-          </div>
-
-          {/* Step 3 */}
-          <div className="bg-[#FAF8F0] border-[2.5px] border-black p-6 shadow-neo flex flex-col justify-between">
-            <div>
-              <div className="w-12 h-12 bg-black text-[#FEFDE6] border-2 border-black flex items-center justify-center font-mono font-black text-lg mb-4 shadow-neo-sm">
-                03
-              </div>
-              <h3 className="font-heading text-2xl font-black uppercase text-black mb-2">
-                3. Organize
-              </h3>
-              <p className="text-sm font-medium text-black/80 leading-relaxed font-sans">
-                Add verified items directly to the timeline calendar and detect timetable overlaps in real time.
-              </p>
-            </div>
-            <div className="mt-6 pt-3 border-t border-black/20 text-xs font-mono text-[#10380B] font-bold uppercase">
-              Conflict-Free Schedule
             </div>
           </div>
         </div>
       </section>
 
-      {/* 6. FINAL FULL-WIDTH ACID YELLOW CTA */}
-      <section className="w-full bg-[#FCE519] border-y-[2.5px] border-black py-20 px-6">
-        <div className="max-w-4xl mx-auto text-center space-y-6">
-          <h2 className="font-heading text-4xl sm:text-5xl md:text-6xl font-black uppercase text-black tracking-tighter">
-            Less Decoding. More Doing.
-          </h2>
-          <p className="text-base sm:text-lg text-black font-medium max-w-xl mx-auto font-sans">
-            Sign in to organize your notices, track deadlines, and plan around conflicts.
-          </p>
-          <div className="pt-2">
-            <button
-              onClick={scrollToLogin}
-              className="btn-neo px-8 py-4 bg-black text-[#FCE519] font-heading font-black text-base uppercase tracking-wider inline-flex items-center gap-2"
-            >
-              <span>Get Started</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </section>
+      {/* 7. System Architecture & Safeguards */}
+      <div id="safeguards">
+        <TrustReliabilitySection />
+      </div>
 
-      {/* 7. MINIMAL FOOTER */}
-      <footer id="about" className="bg-[#FAF8F0] border-t-[2.5px] border-black py-10 px-6">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-xs">
-          <div className="flex items-center gap-2">
-            <span className="font-black text-sm">Notice Decoder</span>
-            <span className="text-black/50">· Team CodeBlooded (Kavya Rane, Kanan Ruparelia, Hrishita Patro)</span>
-          </div>
-          <div className="text-black/60">
-            PS02 Problem Statement Solution · Academic Year 2026
-          </div>
-        </div>
-      </footer>
+      {/* 8. Editorial Footer */}
+      <Footer />
     </div>
   );
 };

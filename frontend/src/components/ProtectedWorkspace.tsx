@@ -1,26 +1,13 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { TimelineCalendar, CalendarEvent, INITIAL_CALENDAR_EVENTS } from './TimelineCalendar';
+import { NoticeProcessingSteps } from './NoticeProcessingSteps';
 import { 
   Sparkles, LogOut, FileText, Calendar, 
-  AlertTriangle, CheckCircle2, Download 
+  AlertTriangle, CheckCircle2, Download, Clock, MapPin
 } from 'lucide-react';
 import { downloadNoticeIcs } from '../utils/icsExport';
-
-interface DecodedNoticeDraft {
-  id: string;
-  title: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  venue: string;
-  deadline: string;
-  deadlineAction: string;
-  summary: string;
-  category: string;
-  uncertainFlags: { field: string; reason: string; suggestion: string }[];
-  isDeadlineOnly?: boolean;
-}
+import { ExtractedNotice } from '../types';
 
 const TEMPLATE_NOTICES = [
   {
@@ -66,102 +53,109 @@ export const ProtectedWorkspace: React.FC = () => {
   // Notice Input & Decoding state
   const [noticeText, setNoticeText] = useState(TEMPLATE_NOTICES[0].text);
   const [isDecoding, setIsDecoding] = useState(false);
-  const [extractedDraft, setExtractedDraft] = useState<DecodedNoticeDraft | null>(null);
+  const [extractedDraft, setExtractedDraft] = useState<ExtractedNotice | null>(null);
   const [successToast, setSuccessToast] = useState('');
   const [errorToast, setErrorToast] = useState('');
 
-  // Extract structured intelligence from notice text
-  const handleDecodeNotice = () => {
+  // Trigger decoding process with animated steps
+  const handleStartDecoding = () => {
     if (!noticeText.trim()) {
-      setErrorToast('Please paste or write notice text before decoding.');
+      setErrorToast('Please paste or select a notice text before decoding.');
       return;
     }
-
     setErrorToast('');
     setIsDecoding(true);
+  };
 
-    setTimeout(() => {
-      const lower = noticeText.toLowerCase();
+  // Called when NoticeProcessingSteps finishes its moving line animation
+  const handleProcessingComplete = () => {
+    const lower = noticeText.toLowerCase();
 
-      // Heuristic structured extractor
-      let title = 'Academic Notice Assessment';
-      let startTime = '10:00';
-      let endTime = '11:30';
-      let venue = 'Department Hall 204';
-      let deadline = 'Same Day, 12:00 Noon';
-      let deadlineAction = 'Submit certified records to department office';
-      let summary = 'Assessment and departmental submissions scheduled. Review extracted hours before calendar sync.';
-      let category = 'Examination';
-      const flags: { field: string; reason: string; suggestion: string }[] = [];
+    // Heuristic structured extractor
+    let title = 'Academic Notice Assessment';
+    let startTime = '10:00';
+    let endTime = '11:30';
+    let venue = 'Department Hall 204';
+    let deadline = 'Same Day, 12:00 Noon';
+    let deadlineAction = 'Submit certified records to department office';
+    let summary = 'Assessment and departmental submissions scheduled. Review extracted hours before calendar sync.';
+    let category: 'Examination' | 'Academic' | 'Guest Lecture' | 'Administrative' = 'Academic';
+    let urgency: 'high' | 'medium' | 'normal' = 'normal';
+    const flags: { field: string; reason: string; suggestion: string }[] = [];
 
-      if (lower.includes('internal test') || lower.includes('csa') || lower.includes('assessment')) {
-        title = 'Internal Test 2 (CSA)';
-        startTime = '10:00';
-        endTime = '11:30';
-        venue = 'Room 204';
-        deadline = '12:00 Noon Sharp';
-        deadlineAction = 'Submit certified practical record books to department office';
-        summary = 'Internal Test 2 scheduled for 10:00–11:30 AM in Room 204. Mandatory practical records due by 12:00 noon.';
-        category = 'Examination';
-        flags.push({
-          field: 'Venue Relocation',
-          reason: 'Roll Nos 45–60 tentatively shifted to Room 206 due to electrical clearance.',
-          suggestion: 'Confirm final room number on department board before 9:30 AM.'
-        });
-      } else if (lower.includes('guest lecture') || lower.includes('ramanujan') || lower.includes('microservices')) {
-        title = 'Guest Lecture: Microservices';
-        startTime = '09:30';
-        endTime = '10:30';
-        venue = 'Seminar Hall B';
-        deadline = 'Prior Day, 5:00 PM';
-        deadlineAction = 'Pre-register attendance link on student portal';
-        summary = 'Dr. Ramanujan expert lecture on distributed microservices. Compulsory attendance for CSE & IT students.';
-        category = 'Guest Lecture';
-        flags.push({
-          field: 'Timetable Coincidence',
-          reason: '9:30–10:30 AM conflicts with scheduled CS-304 Lecture (10:00–11:00 AM).',
-          suggestion: 'Department duty leave clearance or alternative slot required.'
-        });
-      } else if (lower.includes('project') || lower.includes('capstone') || lower.includes('phase 1')) {
-        title = 'Project Phase 1 Review';
-        startTime = '11:30';
-        endTime = '12:30';
-        venue = 'Project Lab 3';
-        deadline = '09:00 AM';
-        deadlineAction = 'Upload presentation slides & repository URL';
-        summary = 'Final year capstone phase 1 evaluation. Review with faculty committee in Project Lab 3.';
-        category = 'Academic';
-      } else {
-        // Generic fallback with detected times if available
-        const timeMatch = noticeText.match(/(\d{1,2}:\d{2})\s*(?:AM|PM)?\s*(?:to|–|-)\s*(\d{1,2}:\d{2})\s*(?:AM|PM)?/i);
-        if (timeMatch) {
-          startTime = timeMatch[1];
-          endTime = timeMatch[2];
-        }
-        title = 'Decoded Campus Notice';
-        venue = 'Main Campus Facility';
-        summary = 'Notice parsed successfully. Extracted time and action items are prepared for your review.';
+    if (lower.includes('internal test') || lower.includes('csa') || lower.includes('assessment')) {
+      title = 'Internal Test 2 (CSA)';
+      startTime = '10:00';
+      endTime = '11:30';
+      venue = 'Room 204';
+      deadline = '12:00 Noon Sharp';
+      deadlineAction = 'Submit certified practical record books to department office';
+      summary = 'Internal Test 2 scheduled for 10:00–11:30 AM in Room 204. Mandatory practical records due by 12:00 noon.';
+      category = 'Examination';
+      urgency = 'high';
+      flags.push({
+        field: 'Venue Relocation',
+        reason: 'Roll Nos 45–60 tentatively shifted to Room 206 due to electrical clearance.',
+        suggestion: 'Confirm final room number on department board before 9:30 AM.'
+      });
+    } else if (lower.includes('guest lecture') || lower.includes('ramanujan') || lower.includes('microservices')) {
+      title = 'Guest Lecture: Microservices';
+      startTime = '09:30';
+      endTime = '10:30';
+      venue = 'Seminar Hall B';
+      deadline = 'Prior Day, 5:00 PM';
+      deadlineAction = 'Pre-register attendance link on student portal';
+      summary = 'Dr. Ramanujan expert lecture on distributed microservices. Compulsory attendance for CSE & IT students.';
+      category = 'Guest Lecture';
+      urgency = 'medium';
+      flags.push({
+        field: 'Timetable Coincidence',
+        reason: '9:30–10:30 AM conflicts with scheduled Lecture (10:00–11:00 AM).',
+        suggestion: 'Department duty leave clearance or alternative slot required.'
+      });
+    } else if (lower.includes('project') || lower.includes('capstone') || lower.includes('phase 1')) {
+      title = 'Project Phase 1 Review';
+      startTime = '11:30';
+      endTime = '12:30';
+      venue = 'Project Lab 3';
+      deadline = '09:00 AM';
+      deadlineAction = 'Upload presentation slides & repository URL';
+      summary = 'Final year capstone phase 1 evaluation. Review with faculty committee in Project Lab 3.';
+      category = 'Academic';
+      urgency = 'high';
+    } else {
+      // Generic fallback with detected times if available
+      const timeMatch = noticeText.match(/(\d{1,2}:\d{2})\s*(?:AM|PM)?\s*(?:to|–|-)\s*(\d{1,2}:\d{2})\s*(?:AM|PM)?/i);
+      if (timeMatch) {
+        startTime = timeMatch[1];
+        endTime = timeMatch[2];
       }
+      title = 'Decoded Campus Notice';
+      venue = 'Main Campus Facility';
+      summary = 'Notice parsed successfully. Extracted time and action items are prepared for your review.';
+    }
 
-      const draft: DecodedNoticeDraft = {
-        id: `notice-${Date.now()}`,
-        title,
-        date: '13 November 2026',
-        startTime,
-        endTime,
-        venue,
-        deadline,
-        deadlineAction,
-        summary,
-        category,
-        uncertainFlags: flags
-      };
+    const draft: ExtractedNotice = {
+      id: `notice-${Date.now()}`,
+      title,
+      rawText: noticeText,
+      date: '13 November 2026',
+      startTime,
+      endTime,
+      venue,
+      deadline,
+      deadlineAction,
+      summary,
+      audience: 'All Students',
+      category,
+      urgency,
+      uncertainFlags: flags
+    };
 
-      setExtractedDraft(draft);
-      setIsDecoding(false);
-      setSuccessToast('Notice decoded into verified structured schema.');
-      setTimeout(() => setSuccessToast(''), 3000);
-    }, 500);
+    setExtractedDraft(draft);
+    setIsDecoding(false);
+    setSuccessToast('Notice decoded into structured academic schema.');
+    setTimeout(() => setSuccessToast(''), 3500);
   };
 
   // Automatic Calendar Integration Flow
@@ -196,287 +190,292 @@ export const ProtectedWorkspace: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FEFDE6] text-black font-sans selection:bg-[#FCE519] selection:text-black">
+    <div className="min-h-screen bg-[#FEFDE6] text-[#172D50] font-sans selection:bg-[#F2EE98] selection:text-[#172D50]">
       
-      {/* 1. AUTHENTICATED WORKSPACE NAVIGATION BAR */}
-      <header className="sticky top-0 z-40 bg-[#FAF8F0] border-b-[2.5px] border-black">
-        <div className="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
+      {/* 1. AUTHENTICATED WORKSPACE EDITORIAL NAVIGATION */}
+      <header className="sticky top-0 z-40 bg-[#FEFDE6]/90 backdrop-blur-md border-b border-[#E8E5BA] transition-all">
+        <div className="max-w-6xl mx-auto px-6 h-16 md:h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-black text-[#FCE519] flex items-center justify-center font-mono font-black text-base border-2 border-black shadow-neo-sm">
+            <div className="w-8 h-8 rounded-lg bg-[#172D50] flex items-center justify-center text-[#F2EE98] font-mono font-bold text-sm shadow-xs">
               ND
             </div>
             <div>
-              <span className="font-heading text-xl md:text-2xl font-black tracking-tight block leading-none">
+              <span className="font-serif font-bold text-lg md:text-xl text-[#172D50] tracking-tight block leading-tight">
                 Notice Decoder
               </span>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-[#10380B] font-bold">
-                Protected Workspace
+              <span className="text-[10px] font-mono uppercase tracking-widest text-[#10380B] font-semibold">
+                Protected Campus Workspace
               </span>
             </div>
           </div>
 
-          {/* User Profile Info & Log Out */}
+          {/* User Profile Info & Sign Out */}
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex flex-col text-right">
-              <span className="font-mono text-xs font-bold text-black">{user?.name}</span>
-              <span className="font-mono text-[10px] text-black/60">{user?.email}</span>
+              <span className="font-mono text-xs font-semibold text-[#172D50]">{user?.name}</span>
+              <span className="font-mono text-[10px] text-[#172D50]/60">{user?.email}</span>
             </div>
 
             <button
               onClick={logout}
-              className="btn-neo px-3.5 py-1.5 bg-[#FFF0F0] hover:bg-[#FFE0E0] border-2 border-black font-mono text-xs font-bold text-[#dc2626] flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-[#FAF8DB] hover:bg-[#F2EE98]/40 border border-[#E8E5BA] text-xs font-mono text-[#E65100] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>Log out</span>
+              <span>Sign out</span>
             </button>
           </div>
         </div>
       </header>
 
       {/* 2. MAIN WORKSPACE CONTAINER */}
-      <main className="max-w-7xl mx-auto px-6 py-8 md:py-12">
+      <main className="max-w-6xl mx-auto px-6 py-8 md:py-12">
         
         {/* Toast Alerts */}
         {successToast && (
-          <div className="mb-6 p-4 bg-[#EAFBEA] border-2 border-[#10380B] shadow-neo font-mono text-xs text-[#10380B] flex items-center gap-2 animate-fade-in">
+          <div className="mb-6 p-4 rounded-xl bg-[#F0FDF4] border border-[#86EFAC] text-xs font-mono text-[#15803D] flex items-center gap-2 animate-fade-in shadow-xs">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span className="font-bold">{successToast}</span>
+            <span className="font-medium">{successToast}</span>
           </div>
         )}
 
         {errorToast && (
-          <div className="mb-6 p-4 bg-[#FFF0F0] border-2 border-[#dc2626] shadow-neo font-mono text-xs text-[#dc2626] flex items-center gap-2 animate-fade-in">
+          <div className="mb-6 p-4 rounded-xl bg-[#FFF0F0] border border-[#FCA5A5] text-xs font-mono text-[#B91C1C] flex items-center gap-2 animate-fade-in shadow-xs">
             <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span className="font-bold">{errorToast}</span>
+            <span className="font-medium">{errorToast}</span>
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Section Header */}
+        <div className="mb-8">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono text-[#10380B]">
+              <span className="w-2 h-2 rounded-full bg-[#10380B] animate-pulse"></span>
+              Live Pipeline Active
+            </span>
+            <span className="text-xs font-mono text-[#172D50]/60">Academic Notice Intelligence</span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-serif font-bold text-[#172D50]">
+            Notice Ingestion & Schedule Synchronizer
+          </h1>
+          <p className="mt-1 text-sm text-[#172D50]/70">
+            Paste an unstructured academic circular to extract dates, identify buried deadlines, and check timetable overlaps.
+          </p>
+        </div>
+
+        {/* Top Grid: Notice Ingestion on Left, Extraction / Processing on Right */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start mb-12">
           
-          {/* LEFT COLUMN: REAL NOTICE DECODER */}
-          <div className="lg:col-span-5 space-y-6">
-            <div className="bg-[#FAF8F0] border-[2.5px] border-black p-6 shadow-neo relative">
-              
-              <div className="flex items-center justify-between pb-3 mb-4 border-b-2 border-black">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-black" />
-                  <h3 className="font-heading font-black text-lg uppercase">
-                    Submit Academic Notice
-                  </h3>
-                </div>
-                <span className="px-2 py-0.5 bg-black text-[#FCE519] font-mono text-[10px] font-bold uppercase">
-                  Input
-                </span>
-              </div>
-
-              {/* Sample Templates Quick-Pick */}
-              <div className="mb-4">
-                <span className="text-[10px] font-mono uppercase text-black/60 font-bold block mb-1.5">
-                  Try Sample Notice Text:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {TEMPLATE_NOTICES.map((tmpl, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setNoticeText(tmpl.text)}
-                      className="px-2 py-1 bg-white border border-black text-[11px] font-mono font-medium hover:bg-[#FCE519] text-left transition-colors"
-                    >
-                      {tmpl.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Text Input */}
-              <div className="mb-4">
-                <label className="text-[11px] font-mono uppercase text-black/80 font-bold block mb-1">
-                  Paste Raw Circular / Notice:
-                </label>
-                <textarea
-                  rows={6}
-                  value={noticeText}
-                  onChange={e => setNoticeText(e.target.value)}
-                  placeholder="Paste notice text here..."
-                  className="w-full p-3 bg-white border-2 border-black font-mono text-xs text-black focus:outline-none focus:bg-[#FEFDE6] shadow-neo-sm leading-relaxed"
-                />
-              </div>
-
-              {/* Decode Action Button */}
-              <button
-                type="button"
-                onClick={handleDecodeNotice}
-                disabled={isDecoding}
-                className="w-full btn-neo py-3 px-4 bg-[#FCE519] hover:bg-[#EEDB07] font-heading font-black text-sm uppercase tracking-wider text-black flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>{isDecoding ? 'Extracting Schema...' : 'Decode Notice Now'}</span>
-              </button>
+          {/* Left Column: Input Box & Sample Notice Selectors */}
+          <div className="lg:col-span-6 bg-[#FAF8DB]/60 border border-[#E8E5BA] rounded-2xl p-6 shadow-xs">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#172D50]/80 flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-[#172D50]" />
+                Unstructured Notice Text
+              </span>
+              <span className="text-[11px] font-mono text-[#172D50]/50">
+                Supports circulars & notifications
+              </span>
             </div>
 
-            {/* EXTRACTED INTELLIGENCE & REVIEW CARD */}
-            {extractedDraft && (
-              <div className="bg-[#FAF8F0] border-[2.5px] border-black p-6 shadow-neo space-y-4 animate-fade-in">
-                
-                <div className="flex items-center justify-between pb-3 border-b-2 border-black">
-                  <span className="font-heading font-black text-sm uppercase flex items-center gap-1.5 text-[#10380B]">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Structured Extraction
-                  </span>
-                  <span className="px-2 py-0.5 bg-[#FCE519] border border-black font-mono text-[10px] font-bold uppercase">
-                    Ready for Review
-                  </span>
-                </div>
+            {/* Quick Template Buttons */}
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-mono text-[#172D50]/60">Load specimen:</span>
+              {TEMPLATE_NOTICES.map((tmpl, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => {
+                    setNoticeText(tmpl.text);
+                    setExtractedDraft(null);
+                  }}
+                  className="px-2.5 py-1 rounded bg-[#FEFDE6] hover:bg-[#FAF8DB] border border-[#E8E5BA] text-[11px] font-mono text-[#172D50] transition-colors cursor-pointer"
+                >
+                  {tmpl.name}
+                </button>
+              ))}
+            </div>
 
-                {/* Editable Title */}
-                <div>
-                  <span className="text-[10px] font-mono uppercase text-black/60 font-bold block mb-1">Event Title</span>
-                  <input
-                    type="text"
-                    value={extractedDraft.title}
-                    onChange={e => setExtractedDraft({ ...extractedDraft, title: e.target.value })}
-                    className="w-full px-2.5 py-1.5 bg-white border-2 border-black font-mono text-xs font-bold text-black"
-                  />
-                </div>
+            {/* Text Area */}
+            <textarea
+              rows={9}
+              value={noticeText}
+              onChange={(e) => setNoticeText(e.target.value)}
+              placeholder="Paste college circular, exam schedule, guest lecture announcement, or club notice..."
+              className="w-full p-4 rounded-xl bg-[#FEFDE6] border border-[#E8E5BA] font-mono text-xs text-[#172D50] placeholder-[#172D50]/40 focus:outline-hidden focus:border-[#172D50] focus:ring-1 focus:ring-[#172D50] transition-all resize-y leading-relaxed"
+            />
 
-                {/* Summary */}
-                <div className="p-3 bg-white border-2 border-black">
-                  <span className="text-[10px] font-mono uppercase text-black/60 font-bold block mb-1">
-                    Explainable Summary
-                  </span>
-                  <p className="text-xs text-black/85 font-medium leading-relaxed">
-                    {extractedDraft.summary}
-                  </p>
-                </div>
+            {/* Action Bar */}
+            <div className="mt-4 flex items-center justify-between gap-4">
+              <span className="text-[11px] font-mono text-[#172D50]/60">
+                {noticeText.trim().split(/\s+/).filter(Boolean).length} words
+              </span>
 
-                {/* Extracted Metadata Grid */}
-                <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-                  <div className="p-2.5 bg-white border border-black">
-                    <span className="text-[10px] text-black/60 uppercase block">Start Time</span>
-                    <input
-                      type="text"
-                      value={extractedDraft.startTime}
-                      onChange={e => setExtractedDraft({ ...extractedDraft, startTime: e.target.value })}
-                      className="w-full font-bold bg-transparent border-b border-black/30 focus:outline-none"
-                    />
-                  </div>
+              <button
+                type="button"
+                onClick={handleStartDecoding}
+                disabled={isDecoding || !noticeText.trim()}
+                className="px-5 py-2.5 rounded-lg bg-[#172D50] text-[#FEFDE6] hover:bg-[#244270] transition-all font-medium text-xs font-mono flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[#F2EE98]" />
+                <span>{isDecoding ? 'Decoding Circular...' : 'Decode Notice'}</span>
+              </button>
+            </div>
+          </div>
 
-                  <div className="p-2.5 bg-white border border-black">
-                    <span className="text-[10px] text-black/60 uppercase block">End Time</span>
-                    <input
-                      type="text"
-                      value={extractedDraft.endTime}
-                      onChange={e => setExtractedDraft({ ...extractedDraft, endTime: e.target.value })}
-                      className="w-full font-bold bg-transparent border-b border-black/30 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="p-2.5 bg-white border border-black">
-                    <span className="text-[10px] text-black/60 uppercase block">Venue</span>
-                    <input
-                      type="text"
-                      value={extractedDraft.venue}
-                      onChange={e => setExtractedDraft({ ...extractedDraft, venue: e.target.value })}
-                      className="w-full font-bold bg-transparent border-b border-black/30 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="p-2.5 bg-[#FFF0F0] border border-[#dc2626]">
-                    <span className="text-[10px] text-[#dc2626] uppercase font-bold block">Strict Deadline</span>
-                    <span className="font-bold text-[#dc2626]">{extractedDraft.deadline}</span>
-                  </div>
-                </div>
-
-                {/* Flags / Uncertainties */}
-                {extractedDraft.uncertainFlags.length > 0 && (
-                  <div className="p-3 bg-[#FFF3E0] border-2 border-[#E65100] text-xs font-mono">
-                    <div className="flex items-center gap-1.5 font-bold text-[#E65100] uppercase mb-1">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      <span>Uncertainty Flagged for Review</span>
-                    </div>
-                    <p className="text-black/80 text-[11px] mb-1">
-                      {extractedDraft.uncertainFlags[0].reason}
-                    </p>
-                    <span className="text-[10px] text-[#10380B] font-bold block">
-                      ↳ Suggestion: {extractedDraft.uncertainFlags[0].suggestion}
+          {/* Right Column: Processing Animation OR Extracted Review Card */}
+          <div className="lg:col-span-6">
+            {isDecoding ? (
+              <NoticeProcessingSteps onComplete={handleProcessingComplete} />
+            ) : extractedDraft ? (
+              <div className="bg-[#FEFDE6] border border-[#172D50]/20 rounded-2xl p-6 shadow-xs animate-fade-in">
+                {/* Draft Header */}
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#E8E5BA]">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#10380B]"></span>
+                    <span className="text-xs font-mono uppercase tracking-wider text-[#10380B] font-semibold">
+                      Extracted Notice Intelligence
                     </span>
+                  </div>
+                  <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50]/80">
+                    {extractedDraft.category}
+                  </span>
+                </div>
+
+                {/* Event Title & Summary */}
+                <h3 className="text-xl font-serif font-bold text-[#172D50] mb-2">
+                  {extractedDraft.title}
+                </h3>
+                <p className="text-xs text-[#172D50]/80 font-sans leading-relaxed mb-4">
+                  {extractedDraft.summary}
+                </p>
+
+                {/* Key Metrics */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="p-3 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA]">
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase text-[#172D50]/60 mb-1">
+                      <Clock className="w-3 h-3 text-[#172D50]" />
+                      <span>Extracted Hours</span>
+                    </div>
+                    <span className="font-mono text-xs font-bold text-[#172D50] block">
+                      {extractedDraft.startTime} – {extractedDraft.endTime}
+                    </span>
+                    <span className="font-mono text-[10px] text-[#172D50]/60">
+                      {extractedDraft.date}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA]">
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase text-[#172D50]/60 mb-1">
+                      <MapPin className="w-3 h-3 text-[#172D50]" />
+                      <span>Venue / Location</span>
+                    </div>
+                    <span className="font-mono text-xs font-bold text-[#172D50] block truncate">
+                      {extractedDraft.venue}
+                    </span>
+                    <span className="font-mono text-[10px] text-[#172D50]/60">
+                      Offline Mode
+                    </span>
+                  </div>
+                </div>
+
+                {/* Buried Deadline Highlight */}
+                {extractedDraft.deadline && (
+                  <div className="mb-4 p-3.5 rounded-xl bg-[#FFF8E1] border border-[#FFE082] text-xs">
+                    <div className="flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#E65100] mb-1">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Buried Deadline Detected: {extractedDraft.deadline}</span>
+                    </div>
+                    <p className="font-sans text-[11px] text-[#172D50]/80">
+                      {extractedDraft.deadlineAction}
+                    </p>
                   </div>
                 )}
 
-                {/* AUTOMATIC CALENDAR INTEGRATION CTA */}
-                <div className="pt-2 flex flex-col gap-2">
+                {/* Flagged Uncertainties */}
+                {extractedDraft.uncertainFlags && extractedDraft.uncertainFlags.length > 0 && (
+                  <div className="mb-5 space-y-2">
+                    {extractedDraft.uncertainFlags.map((flag, idx) => (
+                      <div key={idx} className="p-3 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA] text-xs">
+                        <div className="font-mono text-[11px] font-semibold text-[#172D50] flex items-center justify-between">
+                          <span>Audit Flag: {flag.field}</span>
+                          <span className="text-[10px] text-[#E65100] uppercase font-bold">Needs Verification</span>
+                        </div>
+                        <p className="text-[11px] text-[#172D50]/70 mt-1 font-sans">{flag.reason}</p>
+                        <p className="text-[11px] text-[#10380B] mt-1 font-mono font-medium">Recommendation: {flag.suggestion}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Actions: Add to Live Calendar & Export ICS */}
+                <div className="pt-3 border-t border-[#E8E5BA] flex flex-wrap items-center justify-between gap-3">
                   <button
                     type="button"
                     onClick={handleAddToCalendar}
-                    className="w-full btn-neo py-3 px-4 bg-black text-[#FCE519] font-heading font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+                    className="px-4 py-2 rounded-lg bg-[#10380B] text-[#FEFDE6] hover:bg-[#185311] transition-all font-mono text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-xs"
                   >
-                    <Calendar className="w-4 h-4" />
-                    <span>Add Event to Calendar & Check Overlaps →</span>
+                    <Calendar className="w-3.5 h-3.5 text-[#F2EE98]" />
+                    <span>Sync with Timeline Calendar</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => downloadNoticeIcs({
-                      id: extractedDraft.id,
-                      title: extractedDraft.title,
-                      rawText: noticeText,
-                      date: extractedDraft.date,
-                      startTime: extractedDraft.startTime,
-                      endTime: extractedDraft.endTime,
-                      venue: extractedDraft.venue,
-                      deadline: extractedDraft.deadline,
-                      deadlineAction: extractedDraft.deadlineAction,
-                      summary: extractedDraft.summary,
-                      audience: 'All Students',
-                      category: 'Academic',
-                      urgency: 'high'
-                    })}
-                    className="w-full py-1.5 text-[11px] font-mono text-black/70 hover:text-black underline flex items-center justify-center gap-1"
+                    onClick={() => {
+                      downloadNoticeIcs(extractedDraft);
+                    }}
+                    className="px-3 py-2 rounded-lg bg-[#FAF8DB] border border-[#E8E5BA] hover:bg-[#F2EE98]/40 text-[#172D50] transition-colors font-mono text-xs font-medium flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Download className="w-3 h-3" />
-                    <span>Export as .ics Calendar File</span>
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export .ics</span>
                   </button>
                 </div>
               </div>
+            ) : (
+              <div className="h-full min-h-[320px] bg-[#FAF8DB]/30 border border-dashed border-[#E8E5BA] rounded-2xl p-8 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50]/40 flex items-center justify-center mb-3">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <h4 className="font-serif font-bold text-base text-[#172D50]">
+                  Ready to Extract Notice Intelligence
+                </h4>
+                <p className="mt-1 text-xs text-[#172D50]/60 max-w-sm font-sans leading-relaxed">
+                  Select a specimen above or paste a circular, then click &ldquo;Decode Notice&rdquo; to initiate the 4-step parsing pipeline.
+                </p>
+              </div>
             )}
           </div>
+        </div>
 
-          {/* RIGHT COLUMN: THE PRIMARY WORKING CALENDAR */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="bg-[#FAF8F0] border-[2.5px] border-black p-6 shadow-neo">
-              
-              <div className="flex items-center justify-between pb-3 mb-6 border-b-2 border-black">
-                <div>
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#10380B] font-bold block">
-                    Interactive Scheduling Engine
-                  </span>
-                  <h3 className="font-heading font-black text-xl uppercase text-black">
-                    Primary Academic Calendar
-                  </h3>
-                </div>
-
-                <div className="flex items-center gap-2 font-mono text-xs">
-                  <span className="px-2 py-0.5 bg-[#06b6d4] text-[#0f172a] font-bold border border-black text-[10px]">
-                    Meeting
-                  </span>
-                  <span className="px-2 py-0.5 bg-[#1d4ed8] text-white font-bold border border-black text-[10px]">
-                    Lecture
-                  </span>
-                  <span className="px-2 py-0.5 bg-[#FCE519] text-black font-bold border border-black text-[10px]">
-                    Decoded
-                  </span>
-                </div>
+        {/* 3. WORKING TIMELINE CALENDAR AS PRIMARY CALENDAR */}
+        <div id="calendar" className="mt-12 pt-8 border-t border-[#E8E5BA]">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8DB] border border-[#E8E5BA] text-xs font-mono tracking-wider text-[#10380B] uppercase mb-2">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Primary Calendar Engine</span>
               </div>
+              <h2 className="text-2xl font-serif font-bold text-[#172D50]">
+                Active Schedule & Conflict Visualizer
+              </h2>
+              <p className="text-xs text-[#172D50]/70 font-sans mt-0.5">
+                Evaluates complete duration overlaps across meetings, lectures, and newly decoded notices.
+              </p>
+            </div>
 
-              {/* THE EXACT WORKING TIMELINE CALENDAR */}
-              <TimelineCalendar
-                events={calendarEvents}
-                onEventsChange={handleCalendarChange}
-                compact={false}
-              />
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono px-2.5 py-1 rounded bg-[#FAF8DB] border border-[#E8E5BA] text-[#172D50]">
+                {calendarEvents.length} Active Events
+              </span>
             </div>
           </div>
+
+          {/* Render the Primary Working Timeline Calendar */}
+          <TimelineCalendar
+            events={calendarEvents}
+            onEventsChange={handleCalendarChange}
+          />
         </div>
+
       </main>
     </div>
   );
