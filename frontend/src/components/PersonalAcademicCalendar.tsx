@@ -2,12 +2,13 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ChevronLeft, ChevronRight, Plus, Clock, MapPin, 
   Trash2, Edit3, X, AlertTriangle, Calendar as CalendarIcon, 
-  Download, Bell, Lock
+  Download, Bell, Lock, SlidersHorizontal
 } from 'lucide-react';
 import { downloadNoticeIcs } from '../utils/icsExport';
 import { useAuth } from '../context/AuthContext';
 import { ConflictReportModal } from './ConflictReportModal';
 import { ConflictRequest } from '../types';
+import { SlotPicker, DaySchedule, DEFAULT_WEEK_SCHEDULE } from './SlotPicker';
 
 export interface CalendarEvent {
   id: string;
@@ -88,6 +89,27 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
   const { user } = useAuth();
   const isStudent = user?.role !== 'professor';
   const [isConflictReportOpen, setIsConflictReportOpen] = useState(false);
+  const [isSlotPickerOpen, setIsSlotPickerOpen] = useState(false);
+
+  // User-scoped availability schedule persistence
+  const availabilityStorageKey = `notice_decoder_availability_${user?.id || 'guest'}`;
+  const [availabilityDays, setAvailabilityDays] = useState<DaySchedule[]>(() => {
+    try {
+      const saved = localStorage.getItem(availabilityStorageKey);
+      return saved ? JSON.parse(saved) : DEFAULT_WEEK_SCHEDULE;
+    } catch {
+      return DEFAULT_WEEK_SCHEDULE;
+    }
+  });
+
+  const handleUpdateAvailability = (newDays: DaySchedule[]) => {
+    setAvailabilityDays(newDays);
+    try {
+      localStorage.setItem(availabilityStorageKey, JSON.stringify(newDays));
+    } catch {
+      // Storage error
+    }
+  };
 
   const [internalEvents, setInternalEvents] = useState<CalendarEvent[]>(propEvents || INITIAL_ACADEMIC_EVENTS);
 
@@ -778,6 +800,18 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
           >
             <Plus className="w-3.5 h-3.5 text-[#D9A928]" />
             <span>Add Event</span>
+          </button>
+
+          {/* Availability Slot Picker Button */}
+          <button
+            type="button"
+            onClick={() => setIsSlotPickerOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#FFFDF7] hover:bg-[#FAF8DB] border border-[#E2DDD0] text-[#172B4D] transition-colors text-xs font-mono font-medium shadow-xs cursor-pointer"
+            title="Configure weekly consultation slots and free windows"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-[#D9A928]" />
+            <span className="hidden sm:inline">Availability Windows</span>
+            <span className="sm:hidden">Slots</span>
           </button>
 
           {/* Export Full .ics */}
@@ -1698,6 +1732,56 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             setIsConflictReportOpen(false);
           }}
         />
+      )}
+
+      {/* ============================================================ */}
+      {/* 8. WEEKLY AVAILABILITY & FREE SLOTS CONFIGURATION (SLOT PICKER) */}
+      {/* ============================================================ */}
+      {isSlotPickerOpen && (
+        <div 
+          className="fixed inset-0 z-50 bg-[#172B4D]/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="availability-dialog-title"
+        >
+          <div className="w-full max-w-2xl bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl shadow-2xl overflow-hidden my-8">
+            <div className="p-4 bg-[#F7F4E9] border-b border-[#E2DDD0] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-[#D9A928]" />
+                <span id="availability-dialog-title" className="font-serif font-bold text-sm text-[#172B4D]">
+                  Weekly Availability Windows
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSlotPickerOpen(false)}
+                className="p-1.5 rounded-lg text-[#172B4D]/70 hover:text-[#172B4D] hover:bg-[#E2DDD0]/50 transition-colors cursor-pointer"
+                aria-label="Close availability settings"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 max-h-[80vh] overflow-y-auto">
+              <SlotPicker
+                initialDays={availabilityDays}
+                onUpdate={handleUpdateAvailability}
+                title="Office Hours & Free Consultation Windows"
+                subtitle="Define recurring windows when you are free for student consultations or faculty check-ins."
+              />
+            </div>
+
+            <div className="p-4 bg-[#F7F4E9]/60 border-t border-[#E2DDD0] flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsSlotPickerOpen(false)}
+                className="px-4 py-2 rounded-lg bg-[#172B4D] hover:bg-[#244270] text-[#FFFDF7] text-xs font-mono font-medium shadow-xs transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

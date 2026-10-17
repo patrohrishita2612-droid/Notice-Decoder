@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PublicLanding } from './components/PublicLanding';
 import { ProtectedWorkspace } from './components/ProtectedWorkspace';
+import { ParticlePreloader } from './components/ParticlePreloader';
 
 function AppContent() {
   const { isAuthenticated, isLoading, intendedDestination, setIntendedDestination } = useAuth();
@@ -53,15 +54,18 @@ function AppContent() {
     }
   }, [isAuthenticated, isLoading, currentRoute, intendedDestination, setIntendedDestination]);
 
-  // Loading state
+  // Loading state with intelligent particle preloader
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#FEFDE6] flex items-center justify-center p-6 font-mono text-[#172D50]">
-        <div className="p-6 bg-[#FAF8DB] border border-[#E8E5BA] rounded-xl shadow-xs flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#172D50] text-[#F2EE98] flex items-center justify-center font-bold text-sm">
-            ND
-          </div>
-          <span className="font-medium text-xs">Validating campus authentication session...</span>
+      <div className="min-h-screen bg-[#F7F4E9] flex items-center justify-center p-6 font-mono text-[#172B4D]">
+        <div className="w-full max-w-md">
+          <ParticlePreloader
+            mode="settling"
+            statusLabel="Initializing Notice Decoder..."
+            sublabel="Verifying campus authentication session"
+            height={200}
+            className="shadow-md"
+          />
         </div>
       </div>
     );

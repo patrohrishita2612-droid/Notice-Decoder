@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { PersonalAcademicCalendar, CalendarEvent, INITIAL_ACADEMIC_EVENTS } from './PersonalAcademicCalendar';
 import { NoticeProcessingSteps } from './NoticeProcessingSteps';
+import { ParticlePreloader } from './ParticlePreloader';
 import { ProfessorWorkspace } from './ProfessorWorkspace';
 import { StudentNoticeFeed } from './StudentNoticeFeed';
 import { 
@@ -237,6 +238,8 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
   const [errorToast, setErrorToast] = useState('');
   const [backendDecodedData, setBackendDecodedData] = useState<any>(null);
   const [backendDecodedError, setBackendDecodedError] = useState('');
+  const [isPreviewingAnimation, setIsPreviewingAnimation] = useState(false);
+  const [previewParticleMode, setPreviewParticleMode] = useState<'document' | 'scanning' | 'clustering' | 'constellation' | 'settling'>('scanning');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Duplicate Warning Modal State
@@ -1324,17 +1327,73 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
                       </button>
                     </div>
                   </div>
+                ) : isPreviewingAnimation ? (
+                  <div className="bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl p-6 shadow-xs animate-fade-in space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-[#E2DDD0]">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-[#D9A928]" />
+                        <span className="font-mono text-xs font-bold text-[#172B4D]">
+                          Development Particle Animation Preview
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsPreviewingAnimation(false)}
+                        className="p-1 rounded text-[#172B4D]/60 hover:text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
+                        title="Close preview"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 text-xs font-mono">
+                      {(['document', 'scanning', 'clustering', 'constellation', 'settling'] as const).map(m => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setPreviewParticleMode(m)}
+                          className={`px-2.5 py-1 rounded-md text-[11px] cursor-pointer transition-colors ${
+                            previewParticleMode === m 
+                              ? 'bg-[#172B4D] text-[#FFFDF7] font-bold' 
+                              : 'bg-[#F7F4E9] text-[#172B4D] hover:bg-[#E2DDD0]'
+                          }`}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+
+                    <ParticlePreloader
+                      mode={previewParticleMode}
+                      height={200}
+                      statusLabel={`Stage: ${previewParticleMode.toUpperCase()}`}
+                      sublabel="Interactive canvas: hover cursor or click to scatter particles"
+                    />
+                  </div>
                 ) : (
-                  <div className="h-full min-h-[300px] border border-dashed border-[#E2DDD0] rounded-2xl p-8 flex flex-col items-center justify-center text-center bg-[#FFFDF7]/50">
+                  <div className="h-full min-h-[300px] border border-dashed border-[#E2DDD0] rounded-2xl p-8 flex flex-col items-center justify-center text-center bg-[#FFFDF7]/50 relative">
                     <div className="w-12 h-12 rounded-2xl bg-[#F7F4E9] border border-[#E2DDD0] flex items-center justify-center mb-3 text-[#172B4D]/40">
                       <Sparkles className="w-6 h-6 text-[#D9A928]" />
                     </div>
                     <span className="font-serif font-bold text-[#172B4D] text-base mb-1">
                       Ready for Notice Ingestion
                     </span>
-                    <p className="text-xs font-mono text-[#172B4D]/60 max-w-sm">
+                    <p className="text-xs font-mono text-[#172B4D]/60 max-w-sm mb-4">
                       Upload a circular document (PDF, JPG, PNG) or paste notice text on the left to extract academic entities.
                     </p>
+
+                    {/* Development-only preview trigger */}
+                    {import.meta.env.DEV && (
+                      <button
+                        type="button"
+                        onClick={() => setIsPreviewingAnimation(true)}
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#F7F4E9] hover:bg-[#E2DDD0] border border-[#E2DDD0] text-[11px] font-mono text-[#172B4D] cursor-pointer transition-all shadow-2xs"
+                        title="Preview interactive particle system animation without uploading a document"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-[#D9A928]" />
+                        <span>Preview Particle Animation (Dev)</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

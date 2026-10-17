@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Sparkles, AlertTriangle, Calendar, Clock, MapPin, Download, CheckCircle2 } from 'lucide-react';
 import { ExtractedNotice } from '../types';
 import { downloadNoticeIcs } from '../utils/icsExport';
+import { ParticlePreloader } from './ParticlePreloader';
 
 interface InteractiveDecodeModalProps {
   isOpen: boolean;
@@ -169,8 +170,18 @@ export const InteractiveDecodeModal: React.FC<InteractiveDecodeModalProps> = ({ 
             </button>
           </div>
 
+          {/* Interactive Particle Preloader when Decoding */}
+          {isDecoding && (
+            <ParticlePreloader
+              mode="scanning"
+              height={150}
+              statusLabel="Parsing and extracting notice entities..."
+              sublabel="Applying schema constraints and checking conflicts"
+            />
+          )}
+
           {/* Decoded Output */}
-          {decodedResult && (
+          {decodedResult && !isDecoding && (
             <div className="p-5 rounded-xl bg-[#FAF8DB] border border-[#E8E5BA] space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-[#E8E5BA]">
                 <span className="text-xs font-mono font-bold text-[#15803D] flex items-center gap-1.5">
