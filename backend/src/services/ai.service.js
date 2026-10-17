@@ -61,8 +61,53 @@ async function processNotice(rawText, options = {}) {
   return validatedNotice;
 }
 
+/**
+ * Main AI Notice File Processor (PDF, JPG, PNG)
+ * Accepts a file buffer, mimeType, and optional user notes.
+ * Sends multimodal payload to GeminiProvider (or MockProvider for tests).
+ *
+ * @param {Buffer} fileBuffer - Raw buffer of uploaded document or image
+ * @param {string} mimeType - 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/jpg'
+ * @param {string} [extraText] - Optional typed notice text or commentary
+ * @param {Object} [options] - Optional configurations (e.g. { providerInstance, modelName })
+ * @returns {Promise<Object>} Strictly validated 13-field structured notice object
+ */
+async function processNoticeFile(fileBuffer, mimeType, extraText = '', options = {}) {
+  if (!fileBuffer || !Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
+    const error = new Error('Invalid or empty file buffer provided.');
+    error.status = 400;
+    throw error;
+  }
+
+  const validMimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+  if (!validMimes.includes(mimeType)) {
+    const error = new Error(`Unsupported file type '${mimeType}'. Only PDF (.pdf) and images (.jpg, .jpeg, .png) are permitted.`);
+    error.status = 400;
+    throw error;
+  }
+
+  const provider = resolveProvider(options);
+
+  let rawModelResponse;
+  if (typeof provider.processNoticeDocument === 'function') {
+    rawModelResponse = await provider.processNoticeDocument(fileBuffer, mimeType, extraText, options);
+  } else if (extraText && typeof provider.processNoticeText === 'function') {
+    rawModelResponse = await provider.processNoticeText(extraText, options);
+  } else {
+    const error = new Error('Active AI provider does not support multimodal document decoding.');
+    error.status = 501;
+    throw error;
+  }
+
+  const parsedData = extractJsonFromResponse(rawModelResponse);
+  const validatedNotice = validateAndNormalizeAIResponse(parsedData, extraText, { isDocument: true });
+
+  return validatedNotice;
+}
+
 module.exports = {
   processNotice,
+  processNoticeFile,
   validateNoticeInput,
   extractJsonFromResponse,
   validateAndNormalizeAIResponse,

@@ -41,7 +41,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
   initialTab
 }) => {
   const { 
-    user, logout, isOnline, pendingSyncCount, 
+    user, token, logout, isOnline, pendingSyncCount, 
     queueOfflineAction, syncOfflineQueue, getUserStorageKey 
   } = useAuth();
 
@@ -204,6 +204,76 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     }
   }, [eventsStorageKey, noticesStorageKey, conflictsStorageKey, notificationsStorageKey, deadlinesStorageKey]);
 
+  // Synchronize calendar events and conflict requests with backend database
+  useEffect(() => {
+    if (!token) return;
+
+    // Fetch real persisted events from backend
+    fetch('/api/events', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data?.events && Array.isArray(data.events) && data.events.length > 0) {
+          const mapped: CalendarEvent[] = data.events.map((e: any) => ({
+            id: String(e.id),
+            title: e.title,
+            date: e.date,
+            startTime: e.start_time || '10:00',
+            endTime: e.end_time || '11:00',
+            venue: e.venue || 'Campus Facility',
+            description: e.description || '',
+            category: (e.category || 'Academic') as any,
+            color: (e.color || (e.is_official ? 'blue' : 'cyan')) as any,
+            isOfficial: Boolean(e.is_official),
+            publishedBy: e.published_by,
+            targetAudience: e.target_audience
+          }));
+          setCalendarEvents(mapped);
+          try {
+            localStorage.setItem(eventsStorageKey, JSON.stringify(mapped));
+          } catch {}
+        }
+      })
+      .catch(() => {});
+
+    // Fetch real conflict requests from backend
+    fetch('/api/conflicts', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data?.conflicts && Array.isArray(data.conflicts) && data.conflicts.length > 0) {
+          const mappedConflicts: ConflictRequest[] = data.conflicts.map((c: any) => ({
+            id: String(c.id),
+            eventId: c.event_id ? String(c.event_id) : undefined,
+            eventTitle: c.event_title,
+            studentId: c.student_id,
+            studentName: c.student_name,
+            studentEmail: c.student_email,
+            conflictingCommitmentTitle: c.conflicting_commitment_title,
+            overlapMinutes: Number(c.overlap_minutes) || 0,
+            studentReason: c.student_reason,
+            suggestedDate: c.suggested_date,
+            suggestedTime: c.suggested_time,
+            status: c.status,
+            professorResponse: c.professor_response,
+            createdAt: c.created_at,
+            resolvedAt: c.resolved_at
+          }));
+          setConflictRequests(mappedConflicts);
+          try {
+            localStorage.setItem(conflictsStorageKey, JSON.stringify(mappedConflicts));
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  }, [token, eventsStorageKey, conflictsStorageKey]);
+
   // Save calendar changes
   const handleCalendarChange = (updated: CalendarEvent[]) => {
     setCalendarEvents(updated);
@@ -230,7 +300,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
 
   // Notice Input & Decoding state
   const [noticeText, setNoticeText] = useState('');
-  const [uploadedFile, setUploadedFile] = useState<{ name: string; type: string; size: number } | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<{ file: File; name: string; type: string; size: number } | null>(null);
   const [fileError, setFileError] = useState('');
   const [isDecoding, setIsDecoding] = useState(false);
   const [extractedDraft, setExtractedDraft] = useState<(ExtractedNotice & { isoDate: string | null }) | null>(null);
@@ -278,6 +348,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     }
 
     setUploadedFile({
+      file,
       name: file.name,
       type: file.type,
       size: file.size
@@ -309,26 +380,60 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     setExtractedDraft(null);
 
     // Concurrently query backend AI decode API if online
-    if (isOnline && trimmed) {
-      const fetchPromise = fetch('http://localhost:5000/api/notices/decode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: trimmed })
-      })
-        .then(async res => {
-          const json = await res.json().catch(() => null);
-          if (res.ok && json?.data) {
-            setBackendDecodedData(json.data);
-            return { ok: true, data: json.data };
-          } else {
-            const err = json?.error || json?.message || 'Notice decoding failed.';
-            setBackendDecodedError(err);
-            return { ok: false, error: err };
-          }
+    if (isOnline) {
+      let fetchPromise: Promise<{ ok: boolean; data?: any; error?: string } | null>;
+
+      if (uploadedFile) {
+        // Send file via FormData to multimodal document decoding API
+        const formData = new FormData();
+        formData.append('file', uploadedFile.file);
+        if (trimmed) {
+          formData.append('text', trimmed);
+        }
+
+        fetchPromise = fetch('http://localhost:5000/api/notices/decode-file', {
+          method: 'POST',
+          body: formData
         })
-        .catch(() => {
-          return { ok: false, error: '' };
-        });
+          .then(async res => {
+            const json = await res.json().catch(() => null);
+            if (res.ok && json?.data) {
+              setBackendDecodedData(json.data);
+              return { ok: true, data: json.data };
+            } else {
+              const err = json?.error || json?.message || 'Notice file decoding failed.';
+              setBackendDecodedError(err);
+              return { ok: false, error: err };
+            }
+          })
+          .catch(() => {
+            return { ok: false, error: '' };
+          });
+      } else if (trimmed) {
+        // Send text via JSON to text decoding API
+        fetchPromise = fetch('http://localhost:5000/api/notices/decode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: trimmed })
+        })
+          .then(async res => {
+            const json = await res.json().catch(() => null);
+            if (res.ok && json?.data) {
+              setBackendDecodedData(json.data);
+              return { ok: true, data: json.data };
+            } else {
+              const err = json?.error || json?.message || 'Notice decoding failed.';
+              setBackendDecodedError(err);
+              return { ok: false, error: err };
+            }
+          })
+          .catch(() => {
+            return { ok: false, error: '' };
+          });
+      } else {
+        fetchPromise = Promise.resolve({ ok: false, error: '' });
+      }
+
       decodePromiseRef.current = fetchPromise;
     } else {
       decodePromiseRef.current = null;
@@ -513,6 +618,9 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       if (lines.length > 0) {
         title = lines[0].replace(/^(subject|re|circular|notice|ref)[:\s-]*/i, '').trim() || null;
         summary = lines.slice(1, 4).join(' ').substring(0, 180) || noticeText.substring(0, 180);
+      } else if (uploadedFile) {
+        title = uploadedFile.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ');
+        summary = `Campus circular document (${uploadedFile.name}) attached for academic review.`;
       }
 
       // Check for dates in text: only extract if an actual date pattern is present
@@ -587,7 +695,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     }
 
     // If text genuinely lacks identifiable notice information
-    if (!title && !humanDate && !summary) {
+    if (!title && !humanDate && !summary && !uploadedFile) {
       setIsDecoding(false);
       setErrorToast('Not enough information to extract a notice. Please upload a valid notice or enter more details.');
       setExtractedDraft(null);
@@ -788,6 +896,26 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       localStorage.setItem(conflictsStorageKey, JSON.stringify(updated));
     } catch {}
 
+    // Persist to backend database
+    if (token) {
+      fetch('/api/conflicts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          event_id: req.eventId,
+          event_title: req.eventTitle,
+          conflicting_commitment_title: req.conflictingCommitmentTitle,
+          overlap_minutes: req.overlapMinutes,
+          student_reason: req.studentReason,
+          suggested_date: req.suggestedDate,
+          suggested_time: req.suggestedTime
+        })
+      }).catch(() => {});
+    }
+
     setSuccessToast('Schedule conflict request submitted to faculty desk for review.');
     setTimeout(() => setSuccessToast(''), 4000);
   };
@@ -803,6 +931,30 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     if (officialEvent) {
       const updatedEvents = [...calendarEvents, officialEvent];
       handleCalendarChange(updatedEvents);
+
+      // Persist official event to backend database
+      if (token) {
+        fetch('/api/events', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            title: officialEvent.title,
+            date: officialEvent.date,
+            start_time: officialEvent.startTime,
+            end_time: officialEvent.endTime,
+            venue: officialEvent.venue,
+            description: officialEvent.description,
+            category: officialEvent.category,
+            color: officialEvent.color,
+            is_official: true,
+            target_audience: officialEvent.targetAudience,
+            published_by: officialEvent.publishedBy
+          })
+        }).catch(() => {});
+      }
     }
 
     // Broadcast in-app notification to students
@@ -859,6 +1011,29 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       }
       return c;
     });
+
+    setConflictRequests(updatedConflicts);
+    try {
+      localStorage.setItem(conflictsStorageKey, JSON.stringify(updatedConflicts));
+    } catch {}
+
+    // Persist resolution to backend database
+    if (token) {
+      fetch(`/api/conflicts/${conflictId}/review`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action,
+          professor_response: professorResponse,
+          new_date: newDate,
+          new_start_time: newStartTime,
+          new_end_time: newEndTime
+        })
+      }).catch(() => {});
+    }
 
     setConflictRequests(updatedConflicts);
     try {

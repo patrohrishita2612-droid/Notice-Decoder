@@ -6,6 +6,7 @@ const {
   checkDuplicateNotice,
   createNotice,
   decodeNotice,
+  decodeNoticeFile,
   getAllNotices,
   getNoticeById,
   updateNoticeStatus,
@@ -25,13 +26,18 @@ const upload = multer({
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error(`Invalid file type ${file.mimetype}. Only PDF, JPG, and PNG are allowed.`));
+      const err = new Error(`Invalid file type ${file.mimetype}. Only PDF, JPG, and PNG are allowed.`);
+      err.status = 400;
+      cb(err);
     }
   }
 });
 
 // POST /api/notices/decode - Decode notice text into 13-field structured intelligence (sandbox & preview)
 router.post('/decode', decodeNotice);
+
+// POST /api/notices/decode-file - Decode uploaded PDF, JPG, PNG document with AI (sandbox & preview)
+router.post('/decode-file', upload.single('file'), decodeNoticeFile);
 
 // Protect all private notice persistence & CRUD routes with authentication
 router.use(requireAuth);

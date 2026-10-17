@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Mock AI Provider for deterministic unit & integration tests
  */
 
@@ -35,6 +35,28 @@ class MockProvider {
 
     if (typeof this.response === 'function') {
       return this.response(cleanNoticeText);
+    }
+
+    if (this.response !== undefined && this.response !== null) {
+      if (typeof this.response === 'object') {
+        return JSON.stringify(this.response);
+      }
+      return this.response;
+    }
+
+    return '{}';
+  }
+
+  async processNoticeDocument(fileBuffer, mimeType, extraText = '') {
+    this.callCount++;
+    this.lastInput = { fileBuffer, mimeType, extraText };
+
+    if (this.error) {
+      throw this.error;
+    }
+
+    if (typeof this.response === 'function') {
+      return this.response(fileBuffer, mimeType, extraText);
     }
 
     if (this.response !== undefined && this.response !== null) {

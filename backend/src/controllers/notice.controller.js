@@ -1,5 +1,5 @@
 const { getSupabaseClient } = require('../config/database');
-const { processNotice } = require('../services/ai.service');
+const { processNotice, processNoticeFile } = require('../services/ai.service');
 
 // In-memory fallback repository when Supabase is not connected
 let memoryNotices = [];
@@ -7,7 +7,7 @@ let memoryNotices = [];
 let memoryNotifications = [];
 
 /**
- * Controller: Handle File Upload (PDF, JPG, PNG) & Text Extraction
+ * Controller: Handle File Upload (PDF, JPG, PNG) & AI Extraction
  * POST /api/notices/upload
  */
 async function uploadNoticeFile(req, res, next) {
@@ -36,26 +36,10 @@ async function uploadNoticeFile(req, res, next) {
       });
     }
 
-    // Extract text from buffer
-    let rawText = '';
-    if (mimetype === 'application/pdf') {
-      // Basic PDF text extraction from buffer (ascii text streams)
-      const bufferString = buffer.toString('latin1');
-      const textMatches = bufferString.match(/\(([^)]+)\)\s*Tj/g) || [];
-      if (textMatches.length > 0) {
-        rawText = textMatches.map(m => m.replace(/^\(|\)\s*Tj$/g, '')).join(' ');
-      }
-      if (!rawText || rawText.trim().length < 20) {
-        // Fallback or synthetic representation for binary stream
-        rawText = `ACADEMIC NOTICE DOCUMENT: ${originalname}\nDEPARTMENT CIRCULAR REF: ACAD/2026/${Math.floor(100 + Math.random() * 900)}\nDate: 18 November 2026\nTime: 10:00 AM to 11:30 AM\nVenue: Examination Hall Room 204\nAudience: Computer Science & Engineering\nMandatory certified practical records must be submitted to the department office no later than 12:00 noon.`;
-      }
-    } else {
-      // Image upload (JPG/PNG) - simulated OCR engine response
-      rawText = `CAMPUS CIRCULAR / EVENT POSTER: ${originalname}\nDate: 14 November 2026\nTime: 09:30 AM to 10:30 AM\nVenue: Seminar Hall B (Block 1)\nGuest Speaker: Industry Technology Lecture Series\nTarget Audience: All Enrolled Students\nAction Required: Pre-register attendance link on student portal.`;
-    }
+    const extraText = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
 
-    // Process with AI / NLP extraction
-    const extracted = await processNotice(rawText);
+    // Process natively with Gemini multimodal document extraction
+    const extracted = await processNoticeFile(buffer, mimetype, extraText);
 
     return res.status(200).json({
       success: true,
@@ -65,8 +49,9 @@ async function uploadNoticeFile(req, res, next) {
         fileSize: size,
         fileSizeFormatted: `${(size / 1024).toFixed(1)} KB`
       },
+      data: extracted,
       extracted: {
-        rawText,
+        rawText: extraText || `Document: ${originalname}`,
         title: extracted.title || extracted.summary?.split('.')[0] || originalname.replace(/\.[^/.]+$/, ''),
         summary: extracted.summary || '',
         date: extracted.event_date || extracted.date || null,
@@ -74,9 +59,63 @@ async function uploadNoticeFile(req, res, next) {
         venue: extracted.venue || null,
         targetAudience: extracted.target_audience || null,
         requiredAction: extracted.required_action || null,
-        category: extracted.category || (rawText.toLowerCase().includes('exam') ? 'Examination' : 'Academic'),
-        urgency: extracted.urgency || (rawText.toLowerCase().includes('mandatory') ? 'high' : 'normal')
+        category: extracted.category || 'Academic',
+        urgency: extracted.urgency || 'normal'
       }
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({
+        error: error.message,
+        details: error.details
+      });
+    }
+    next(error);
+  }
+}
+
+/**
+ * Controller: AI notice decode from uploaded document/file (PDF, JPG, PNG)
+ * POST /api/notices/decode-file
+ */
+async function decodeNoticeFile(req, res, next, options = {}) {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No file uploaded. Please upload a PDF, JPG, or PNG document.'
+      });
+    }
+
+    const { originalname, mimetype, size, buffer } = req.file;
+
+    // Check size <= 10MB
+    const MAX_SIZE = 10 * 1024 * 1024;
+    if (size > MAX_SIZE) {
+      return res.status(400).json({
+        error: `File size exceeds the 10MB limit. Uploaded size: ${(size / (1024 * 1024)).toFixed(2)}MB`
+      });
+    }
+
+    const validMimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+    if (!validMimes.includes(mimetype)) {
+      return res.status(400).json({
+        error: `Unsupported file type '${mimetype}'. Only PDF (.pdf) and images (.jpg, .jpeg, .png) are permitted.`
+      });
+    }
+
+    const extraText = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+
+    const result = await processNoticeFile(buffer, mimetype, extraText, options);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Notice document decoded successfully.',
+      fileInfo: {
+        fileName: originalname,
+        fileType: mimetype,
+        fileSize: size
+      },
+      data: result
     });
   } catch (error) {
     if (error.status) {
@@ -558,6 +597,7 @@ module.exports = {
   updateNotice,
   deleteNotice,
   decodeNotice,
+  decodeNoticeFile,
   memoryNotices,
   memoryNotifications
 };

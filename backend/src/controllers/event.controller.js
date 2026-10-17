@@ -12,10 +12,14 @@ async function getAllEvents(req, res, next) {
     let events = [];
     try {
       const supabase = getSupabaseClient();
-      const { data, error } = await supabase
+      let query = supabase
         .from('events')
         .select('*')
         .order('date', { ascending: true });
+      if (req.query?.date) {
+        query = query.eq('date', req.query.date.trim());
+      }
+      const { data, error } = await query;
       if (!error && data) {
         events = data;
       } else {
@@ -23,6 +27,10 @@ async function getAllEvents(req, res, next) {
       }
     } catch {
       events = memoryEvents;
+    }
+
+    if (req.query?.date) {
+      events = events.filter(e => e.date === req.query.date.trim());
     }
 
     return res.status(200).json({
@@ -45,7 +53,7 @@ async function createEvent(req, res, next) {
 
     const { 
       title, date, start_time, end_time, venue, 
-      description, category, color, is_official, target_audience 
+      description, category, color, is_official, target_audience, published_by 
     } = req.body;
 
     if (!title || !date) {
@@ -72,7 +80,7 @@ async function createEvent(req, res, next) {
       category: category || 'Academic',
       color: color || (is_official ? 'blue' : 'cyan'),
       is_official: Boolean(is_official && isProfessor),
-      published_by: is_official ? 'Dr. Evelyn Reed (Head of Department)' : req.user?.id,
+      published_by: published_by || (is_official ? (req.user?.name ? `${req.user.name}` : 'Dr. Evelyn Reed (Head of Department)') : (req.user?.name || req.user?.id || 'Student')),
       target_audience: target_audience || 'All Students',
       user_id: req.user?.id || 'anon',
       created_at: new Date().toISOString()
@@ -86,6 +94,7 @@ async function createEvent(req, res, next) {
         .select()
         .single();
       if (!error && data) {
+        memoryEvents.push(data);
         return res.status(201).json({ message: 'Event created successfully.', event: data });
       }
     } catch {

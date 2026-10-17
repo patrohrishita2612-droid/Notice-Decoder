@@ -1727,6 +1727,7 @@ export const PersonalAcademicCalendar: React.FC<PersonalAcademicCalendarProps> =
             (c.eventId && String(c.eventId) === String(selectedTimelineEvent.id)) ||
             (c.eventTitle && c.eventTitle.toLowerCase().includes(selectedTimelineEvent.title.toLowerCase()))
           ) || null}
+          suggestedSlot={selectedDateConflict?.suggestedSlot || null}
           onSubmitConflict={(req) => {
             onConflictSubmit?.(req);
             setIsConflictReportOpen(false);

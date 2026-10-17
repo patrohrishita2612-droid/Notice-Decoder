@@ -178,7 +178,7 @@ function sanitizeArray(val) {
  * @param {string} originalNoticeText - The source notice text
  * @returns {Object} Strictly conformant structured response
  */
-function validateAndNormalizeAIResponse(rawData, originalNoticeText = '') {
+function validateAndNormalizeAIResponse(rawData, originalNoticeText = '', options = {}) {
   if (!rawData || typeof rawData !== 'object') {
     throw new AIResponseError('Extracted AI data must be a JSON object.');
   }
@@ -266,25 +266,29 @@ function validateAndNormalizeAIResponse(rawData, originalNoticeText = '') {
   const verifiedEvidence = [];
   const unverifiedQuotes = [];
 
-  for (const quote of candidateEvidence) {
-    const normalizedQuote = normalizeForComparison(quote);
-    if (normalizedQuote.length === 0) continue;
+  if (options.isDocument || !originalNoticeText) {
+    result.evidence = candidateEvidence;
+  } else {
+    for (const quote of candidateEvidence) {
+      const normalizedQuote = normalizeForComparison(quote);
+      if (normalizedQuote.length === 0) continue;
 
-    // Verify whether the quotation exists in the original notice text
-    if (normalizedOriginal.includes(normalizedQuote)) {
-      verifiedEvidence.push(quote);
-    } else {
-      unverifiedQuotes.push(quote);
+      // Verify whether the quotation exists in the original notice text
+      if (normalizedOriginal.includes(normalizedQuote)) {
+        verifiedEvidence.push(quote);
+      } else {
+        unverifiedQuotes.push(quote);
+      }
     }
-  }
 
-  result.evidence = verifiedEvidence;
+    result.evidence = verifiedEvidence;
 
-  // If evidence quotations failed verification against the text, track in missing_information
-  if (unverifiedQuotes.length > 0) {
-    result.missing_information.push(
-      `Notice verification note: ${unverifiedQuotes.length} candidate quote(s) could not be verified in original text.`
-    );
+    // If evidence quotations failed verification against the text, track in missing_information
+    if (unverifiedQuotes.length > 0) {
+      result.missing_information.push(
+        `Notice verification note: ${unverifiedQuotes.length} candidate quote(s) could not be verified in original text.`
+      );
+    }
   }
 
   // 9. Backwards compatibility for Member 2's Supabase schema

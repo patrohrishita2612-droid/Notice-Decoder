@@ -198,7 +198,201 @@ async function reviewConflictRequest(req, res, next) {
   }
 }
 
+function parseTimeToMinutes(t) {
+  if (!t || typeof t !== 'string') return 0;
+  const match = t.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  if (!match) return 0;
+  let h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  const ampm = match[3]?.toUpperCase();
+
+  if (ampm === 'PM' && h < 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+
+  return h * 60 + m;
+}
+
+function formatMinutes24(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function formatMinutes12(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const displayH = h % 12 === 0 ? 12 : h % 12;
+  return `${displayH}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+function normalizeDate(d) {
+  if (!d || typeof d !== 'string') return '';
+  const trimmed = d.trim();
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) return trimmed;
+  const parsed = new Date(trimmed.replace(/(st|nd|rd|th)/i, ''));
+  if (!isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  return trimmed;
+}
+
+/**
+ * Controller: Check for scheduling conflicts (Pre-scheduling validation)
+ * POST /api/conflicts/check
+ */
+async function checkScheduleConflict(req, res, next) {
+  try {
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body.' });
+    }
+
+    const { date, start_time, end_time, target_audience, exclude_event_id } = req.body;
+
+    if (!date || !start_time || !end_time) {
+      return res.status(400).json({
+        error: 'Event date, start_time, and end_time are required to check conflicts.'
+      });
+    }
+
+    const normDate = normalizeDate(date);
+    const sProposed = parseTimeToMinutes(start_time);
+    const eProposed = parseTimeToMinutes(end_time);
+
+    if (eProposed <= sProposed) {
+      return res.status(400).json({
+        error: 'Invalid time window: end_time must be strictly after start_time.'
+      });
+    }
+
+    const proposedAudience = (target_audience || 'All Students').trim();
+
+    // Query persisted events
+    let allEvents = [];
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('events')
+        .select('*');
+      if (!error && data && data.length > 0) {
+        allEvents = data;
+      } else {
+        allEvents = memoryEvents;
+      }
+    } catch {
+      allEvents = memoryEvents;
+    }
+
+    // Filter events matching the target date
+    const dateEvents = allEvents.filter(e => {
+      if (exclude_event_id && String(e.id) === String(exclude_event_id)) return false;
+      return normalizeDate(e.date) === normDate;
+    });
+
+    // Determine relevant events based on audience and participants
+    const relevantEvents = dateEvents.filter(e => {
+      const evAudience = (e.target_audience || 'All Students').trim();
+      // If proposed audience is 'All Students', any student event on that day is relevant
+      if (proposedAudience === 'All Students' || evAudience === 'All Students') {
+        return true;
+      }
+      // If specific audience matches exactly or overlaps
+      if (proposedAudience.toLowerCase() === evAudience.toLowerCase()) {
+        return true;
+      }
+      // Check substring matches e.g. 'CS-302 CSA' vs 'CS-302' or 'Year 3'
+      if (proposedAudience.toLowerCase().includes(evAudience.toLowerCase()) || 
+          evAudience.toLowerCase().includes(proposedAudience.toLowerCase())) {
+        return true;
+      }
+      // Student personal commitment
+      if (!e.is_official) {
+        return true;
+      }
+      return false;
+    });
+
+    // Evaluate strict interval overlap: overlapStart < overlapEnd
+    const conflicts = [];
+    for (const ev of relevantEvents) {
+      const sEv = parseTimeToMinutes(ev.start_time);
+      const eEv = parseTimeToMinutes(ev.end_time);
+
+      const overlapStart = Math.max(sProposed, sEv);
+      const overlapEnd = Math.min(eProposed, eEv);
+
+      if (overlapStart < overlapEnd) {
+        const overlapMinutes = overlapEnd - overlapStart;
+        conflicts.push({
+          eventId: ev.id,
+          title: ev.title,
+          date: ev.date,
+          startTime: ev.start_time,
+          endTime: ev.end_time,
+          venue: ev.venue || 'Campus Facility',
+          organizer: ev.published_by || (ev.is_official ? 'Faculty Member' : 'Student'),
+          targetAudience: ev.target_audience || 'All Students',
+          isOfficial: Boolean(ev.is_official),
+          userId: ev.user_id,
+          affectedStudents: [
+            ev.user_id && ev.user_id !== 'anon' ? ev.user_id : (ev.target_audience || 'Cohort Students')
+          ],
+          overlapStart: formatMinutes24(overlapStart),
+          overlapEnd: formatMinutes24(overlapEnd),
+          overlapMinutes,
+          description: `${overlapMinutes} min overlap: Proposed session (${start_time}–${end_time}) overlaps with "${ev.title}" (${ev.start_time}–${ev.end_time})`
+        });
+      }
+    }
+
+    // Dynamic conflict-free alternative slot generation based on actual saved schedule
+    const duration = eProposed - sProposed;
+    const suggestedSlots = [];
+
+    // Scan standard academic hours: 09:00 (540m) to 17:00 (1020m)
+    for (let candidateStart = 540; candidateStart + duration <= 1020; candidateStart += 30) {
+      const candidateEnd = candidateStart + duration;
+
+      // Skip the proposed slot itself
+      if (candidateStart === sProposed && candidateEnd === eProposed) continue;
+
+      // Check if candidate slot clashes with ANY relevant event
+      const clashes = relevantEvents.some(ev => {
+        const sEv = parseTimeToMinutes(ev.start_time);
+        const eEv = parseTimeToMinutes(ev.end_time);
+        return Math.max(candidateStart, sEv) < Math.min(candidateEnd, eEv);
+      });
+
+      if (!clashes) {
+        suggestedSlots.push({
+          date: normDate,
+          startTime: formatMinutes24(candidateStart),
+          endTime: formatMinutes24(candidateEnd),
+          displayTime: `${formatMinutes12(candidateStart)} – ${formatMinutes12(candidateEnd)}`,
+          durationMinutes: duration,
+          reason: `Zero schedule clashes detected for ${proposedAudience}`
+        });
+        if (suggestedSlots.length >= 4) break;
+      }
+    }
+
+    return res.status(200).json({
+      has_conflict: conflicts.length > 0,
+      conflict_count: conflicts.length,
+      conflicts,
+      suggested_slots: suggestedSlots
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
+  checkScheduleConflict,
   submitConflictRequest,
   getConflictRequests,
   reviewConflictRequest,

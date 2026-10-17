@@ -12,6 +12,7 @@ interface ConflictReportModalProps {
   overlapMinutes?: number;
   onSubmitConflict: (request: Omit<ConflictRequest, 'id' | 'createdAt' | 'status'>) => void;
   existingRequest?: ConflictRequest | null;
+  suggestedSlot?: { start: string; end: string } | null;
 }
 
 export const ConflictReportModal: React.FC<ConflictReportModalProps> = ({
@@ -21,7 +22,8 @@ export const ConflictReportModal: React.FC<ConflictReportModalProps> = ({
   conflictingEvent,
   overlapMinutes = 30,
   onSubmitConflict,
-  existingRequest
+  existingRequest,
+  suggestedSlot
 }) => {
   const { user } = useAuth();
   if (!isOpen) return null;
@@ -208,27 +210,30 @@ export const ConflictReportModal: React.FC<ConflictReportModalProps> = ({
               
               {/* Quick Chip Suggestions */}
               <div className="flex flex-wrap gap-2 text-[11px] font-mono">
-                <button
-                  type="button"
-                  onClick={() => handleApplyQuickChip('11:00 AM - 12:00 PM')}
-                  className="px-2.5 py-1 rounded-lg bg-[#F7F4E9] hover:bg-[#E2DDD0]/60 border border-[#E2DDD0] text-[#172B4D] transition-colors cursor-pointer"
-                >
-                  +1 Hour: 11:00 AM – 12:00 PM
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleApplyQuickChip('02:00 PM - 03:00 PM')}
-                  className="px-2.5 py-1 rounded-lg bg-[#F7F4E9] hover:bg-[#E2DDD0]/60 border border-[#E2DDD0] text-[#172B4D] transition-colors cursor-pointer"
-                >
-                  Afternoon: 02:00 PM – 03:00 PM
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleApplyQuickChip('10:00 AM - 11:00 AM', '2026-11-14')}
-                  className="px-2.5 py-1 rounded-lg bg-[#F7F4E9] hover:bg-[#E2DDD0]/60 border border-[#E2DDD0] text-[#172B4D] transition-colors cursor-pointer"
-                >
-                  Next Day 10:00 AM
-                </button>
+                {suggestedSlot && (
+                  <button
+                    type="button"
+                    onClick={() => handleApplyQuickChip(`${suggestedSlot.start} – ${suggestedSlot.end}`)}
+                    className="px-2.5 py-1 rounded-lg bg-[#F0FDF4] hover:bg-[#DCFCE7] border border-[#86EFAC] text-[#15803D] font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                  >
+                    <CheckCircle2 className="w-3 h-3 text-[#15803D]" />
+                    <span>Calculated Gap: {suggestedSlot.start} – {suggestedSlot.end}</span>
+                  </button>
+                )}
+                {officialEvent.endTime && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const parts = officialEvent.endTime.split(':');
+                      const nextH = parts.length >= 2 ? (parseInt(parts[0], 10) + 1) % 24 : 13;
+                      const nextHStr = `${String(nextH).padStart(2, '0')}:${parts[1] || '00'}`;
+                      handleApplyQuickChip(`${officialEvent.endTime} – ${nextHStr}`);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-[#F7F4E9] hover:bg-[#E2DDD0]/60 border border-[#E2DDD0] text-[#172B4D] transition-colors cursor-pointer"
+                  >
+                    After Session: {officialEvent.endTime}
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">

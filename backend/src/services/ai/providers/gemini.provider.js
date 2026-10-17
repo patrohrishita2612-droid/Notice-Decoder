@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Google Gemini Provider Implementation
  * Uses the official @google/generative-ai SDK.
  */
@@ -47,6 +47,76 @@ class GeminiProvider {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const result = await model.generateContent(prompt);
+        const response = await result.response;
+        return response.text();
+      } catch (error) {
+        const msg = error.message || String(error);
+
+        if (msg.includes('API_KEY_INVALID') || msg.includes('403') || msg.includes('API key not valid')) {
+          const err = new Error('Gemini API authentication failed: Invalid GEMINI_API_KEY.');
+          err.status = 401;
+          throw err;
+        }
+
+        // If transient 503 high demand or 429, retry with backoff
+        if (
+          (msg.includes('503') || msg.includes('high demand') || msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) &&
+          attempt < maxAttempts
+        ) {
+          await new Promise(resolve => setTimeout(resolve, attempt * 1500));
+          continue;
+        }
+
+        if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429')) {
+          const err = new Error('Gemini API quota exceeded or rate limit reached. Please retry shortly.');
+          err.status = 429;
+          throw err;
+        }
+
+        const err = new Error(`Gemini AI service error: ${msg}`);
+        err.status = 502;
+        throw err;
+      }
+    }
+  }
+
+  /**
+   * Call Gemini to extract structured notice details from an attached document/image (PDF, JPG, PNG)
+   * Uses Gemini's native multimodal inlineData.
+   * @param {Buffer} fileBuffer
+   * @param {string} mimeType
+   * @param {string} [extraText]
+   * @param {Object} [options]
+   * @returns {Promise<string>} Raw model response JSON string
+   */
+  async processNoticeDocument(fileBuffer, mimeType, extraText = '', options = {}) {
+    const model = this.client.getGenerativeModel({
+      model: options.modelName || this.modelName,
+      systemInstruction: SYSTEM_INSTRUCTION,
+      generationConfig: {
+        temperature: 0.1,
+        responseMimeType: 'application/json'
+      }
+    });
+
+    const promptText = extraText
+      ? `Additional notes or context: ${extraText}\nExtract all official academic notice details from the attached document.`
+      : 'Extract all official academic notice details from the attached document into the strict 13-field JSON schema.';
+
+    const prompt = buildNoticePrompt(promptText);
+
+    const filePart = {
+      inlineData: {
+        data: fileBuffer.toString('base64'),
+        mimeType: mimeType
+      }
+    };
+
+    const maxAttempts = 3;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const result = await model.generateContent([prompt, filePart]);
         const response = await result.response;
         return response.text();
       } catch (error) {

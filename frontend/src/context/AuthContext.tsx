@@ -31,6 +31,7 @@ export interface OfflineSyncItem {
 
 interface AuthContextType {
   user: User | null;
+  token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   isOnline: boolean;
@@ -101,6 +102,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [intendedDestination, setIntendedDestination] = useState<string | null>(null);
@@ -192,19 +194,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.removeItem(SESSION_LOCAL_KEY);
           sessionStorage.removeItem(SESSION_SESSION_KEY);
           setUser(null);
+          setToken(null);
         } else if (session.expiresAt > Date.now() && session.user && session.token) {
           // Valid authenticated session verified
           setUser(session.user);
+          setToken(session.token);
         } else {
           // Expired session - purge completely
           localStorage.removeItem(SESSION_LOCAL_KEY);
           sessionStorage.removeItem(SESSION_SESSION_KEY);
           setUser(null);
+          setToken(null);
         }
       } catch {
         localStorage.removeItem(SESSION_LOCAL_KEY);
         sessionStorage.removeItem(SESSION_SESSION_KEY);
         setUser(null);
+        setToken(null);
       }
     }
 
@@ -238,8 +244,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ? Date.now() + 1000 * 60 * 60 * 24 * 30 // 30 days
       : Date.now() + 1000 * 60 * 60 * 8; // 8 hours
 
+    const sessionToken = `token_${authenticatedUser.id}_${authenticatedUser.role || 'student'}_${Date.now()}`;
     const session: AuthSession = {
-      token: `token_${authenticatedUser.id}_${authenticatedUser.role || 'student'}_${Date.now()}`,
+      token: sessionToken,
       user: authenticatedUser,
       keepMeSignedIn,
       expiresAt
@@ -254,6 +261,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     setUser(authenticatedUser);
+    setToken(sessionToken);
   };
 
   const login = async (
@@ -477,6 +485,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem(SESSION_LOCAL_KEY);
     sessionStorage.removeItem(SESSION_SESSION_KEY);
     setUser(null);
+    setToken(null);
     setIntendedDestination(null);
     setPendingSyncCount(0);
   };
@@ -485,6 +494,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user,
+        token,
         isAuthenticated: !!user,
         isLoading,
         isOnline,

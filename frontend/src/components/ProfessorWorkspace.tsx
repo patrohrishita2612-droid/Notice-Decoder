@@ -34,7 +34,7 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
   onReviewConflict,
   onNavigateToCalendar
 }) => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [activeSection, setActiveSection] = useState<'publisher' | 'circulars' | 'conflicts'>('publisher');
 
   // Notice Publisher Form State
@@ -45,11 +45,98 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
 
   // File Upload State
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadedFile, setUploadedFile] = useState<{ name: string; type: string; size: number } | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<{ file: File; name: string; type: string; size: number } | null>(null);
   const [fileError, setFileError] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [extractedDraft, setExtractedDraft] = useState<ExtractedNotice & { isoDate?: string | null } | null>(null);
   const [toastMessage, setToastMessage] = useState('');
+  const [backendData, setBackendData] = useState<any>(null);
+  const [backendError, setBackendError] = useState<string>('');
+  const parsePromiseRef = useRef<Promise<{ ok: boolean; data?: any; error?: string } | null> | null>(null);
+
+  // Pre-scheduling Conflict Detection State
+  const [isCheckingConflict, setIsCheckingConflict] = useState(false);
+  const [conflictCheckResult, setConflictCheckResult] = useState<{
+    has_conflict: boolean;
+    conflict_count: number;
+    conflicts: Array<{
+      eventId: string | number;
+      title: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      venue: string;
+      organizer: string;
+      targetAudience: string;
+      isOfficial: boolean;
+      overlapStart: string;
+      overlapEnd: string;
+      overlapMinutes: number;
+      description: string;
+      affectedStudents?: string[];
+    }>;
+    suggested_slots: Array<{
+      date: string;
+      startTime: string;
+      endTime: string;
+      displayTime: string;
+      durationMinutes: number;
+      reason: string;
+    }>;
+  } | null>(null);
+  const [showConflictOverrideConfirm, setShowConflictOverrideConfirm] = useState(false);
+
+  // Run backend conflict check
+  const runConflictCheck = async (
+    date?: string | null,
+    startTime?: string | null,
+    endTime?: string | null,
+    audience?: string
+  ) => {
+    const checkDate = date || extractedDraft?.isoDate || extractedDraft?.date;
+    const checkStart = startTime || extractedDraft?.startTime;
+    const checkEnd = endTime || extractedDraft?.endTime;
+    const checkAudience = audience || targetAudience;
+
+    if (!checkDate || !checkStart || !checkEnd) {
+      setConflictCheckResult(null);
+      return;
+    }
+
+    setIsCheckingConflict(true);
+    try {
+      const res = await fetch('/api/conflicts/check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          date: checkDate,
+          start_time: checkStart,
+          end_time: checkEnd,
+          target_audience: checkAudience
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setConflictCheckResult(data);
+      }
+    } catch {
+      // Non-blocking
+    } finally {
+      setIsCheckingConflict(false);
+    }
+  };
+
+  // Re-check conflicts whenever proposed date, time window, or target audience changes
+  React.useEffect(() => {
+    if (extractedDraft?.isoDate && extractedDraft?.startTime && extractedDraft?.endTime) {
+      runConflictCheck(extractedDraft.isoDate, extractedDraft.startTime, extractedDraft.endTime, targetAudience);
+    } else {
+      setConflictCheckResult(null);
+    }
+  }, [extractedDraft?.isoDate, extractedDraft?.startTime, extractedDraft?.endTime, targetAudience, token]);
 
   // Conflict Review Modal State
   const [reviewingConflict, setReviewingConflict] = useState<ConflictRequest | null>(null);
@@ -89,6 +176,7 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
     }
 
     setUploadedFile({
+      file,
       name: file.name,
       type: file.type,
       size: file.size
@@ -103,25 +191,95 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
       return;
     }
     
-    // Check if input is meaningless or too short
+    // Check if input is meaningless or too short (only if no file uploaded)
     const words = trimmed.split(/\s+/).filter(Boolean);
     const hasRepeatedCharsOnly = /^([a-zA-Z0-9])\1+$/i.test(trimmed);
-    if (trimmed && (trimmed.length < 15 || words.length < 3 || hasRepeatedCharsOnly)) {
+    if (!uploadedFile && trimmed && (trimmed.length < 15 || words.length < 3 || hasRepeatedCharsOnly)) {
       setFileError('Not enough information to extract a notice. Please upload a valid notice or enter more details.');
       return;
     }
 
     setFileError('');
     setIsProcessing(true);
+    setBackendData(null);
+    setBackendError('');
+
+    if (uploadedFile) {
+      const formData = new FormData();
+      formData.append('file', uploadedFile.file);
+      if (trimmed) formData.append('text', trimmed);
+
+      const promise = fetch('http://localhost:5000/api/notices/decode-file', {
+        method: 'POST',
+        body: formData
+      })
+        .then(async res => {
+          const json = await res.json().catch(() => null);
+          if (res.ok && json?.data) {
+            setBackendData(json.data);
+            return { ok: true, data: json.data };
+          } else {
+            const err = json?.error || json?.message || '';
+            setBackendError(err);
+            return { ok: false, error: err };
+          }
+        })
+        .catch(() => ({ ok: false, error: '' }));
+      parsePromiseRef.current = promise;
+    } else if (trimmed) {
+      const promise = fetch('http://localhost:5000/api/notices/decode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: trimmed })
+      })
+        .then(async res => {
+          const json = await res.json().catch(() => null);
+          if (res.ok && json?.data) {
+            setBackendData(json.data);
+            return { ok: true, data: json.data };
+          } else {
+            const err = json?.error || json?.message || '';
+            setBackendError(err);
+            return { ok: false, error: err };
+          }
+        })
+        .catch(() => ({ ok: false, error: '' }));
+      parsePromiseRef.current = promise;
+    } else {
+      parsePromiseRef.current = null;
+    }
   };
 
   // Called when NoticeProcessingSteps finishes
-  const handleParsingComplete = () => {
+  const handleParsingComplete = async () => {
+    let resolvedData = backendData;
+    let resolvedError = backendError;
+
+    if (!resolvedData && !resolvedError && parsePromiseRef.current) {
+      try {
+        const result = await parsePromiseRef.current;
+        if (result?.ok && result?.data) {
+          resolvedData = result.data;
+        } else if (result?.error) {
+          resolvedError = result.error;
+        }
+      } catch {
+        // Fallback safely
+      }
+    }
+
+    if (resolvedError) {
+      setIsProcessing(false);
+      setFileError(resolvedError);
+      parsePromiseRef.current = null;
+      return;
+    }
+
     const trimmed = noticeText.trim();
     const words = trimmed.split(/\s+/).filter(Boolean);
     const hasRepeatedCharsOnly = /^([a-zA-Z0-9])\1+$/i.test(trimmed);
 
-    if (trimmed && (trimmed.length < 15 || words.length < 3 || hasRepeatedCharsOnly)) {
+    if (!uploadedFile && trimmed && (trimmed.length < 15 || words.length < 3 || hasRepeatedCharsOnly)) {
       setIsProcessing(false);
       setFileError('Not enough information to extract a notice. Please upload a valid notice or enter more details.');
       return;
@@ -134,13 +292,52 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
     let venue: string | null = null;
     let deadline: string | null = null;
     let deadlineAction: string | null = null;
-    let summary: string = trimmed || 'Circular uploaded for departmental review.';
+    let summary: string = trimmed || (uploadedFile ? `Official circular document (${uploadedFile.name}) attached for departmental review.` : 'Circular uploaded for departmental review.');
     let category: 'Examination' | 'Academic' | 'Guest Lecture' | 'Administrative' = 'Academic';
     let urgency: 'high' | 'medium' | 'normal' = 'normal';
     let isoDate: string | null = null;
     let humanDate: string | null = null;
 
-    if (lower.includes('internal test') || lower.includes('csa') || lower.includes('assessment')) {
+    if (resolvedData) {
+      title = noticeTitle.trim() || resolvedData.title || (uploadedFile ? uploadedFile.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ') : 'Official Notice');
+      summary = resolvedData.summary || summary;
+      const rawDate = resolvedData.event_date || resolvedData.date;
+      if (rawDate) {
+        humanDate = String(rawDate).trim();
+        const isoMatch = humanDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (isoMatch) {
+          isoDate = humanDate;
+        } else {
+          const parsed = new Date(humanDate.replace(/(st|nd|rd|th)/i, ''));
+          if (!isNaN(parsed.getTime())) {
+            const y = parsed.getFullYear();
+            const m = String(parsed.getMonth() + 1).padStart(2, '0');
+            const d = String(parsed.getDate()).padStart(2, '0');
+            isoDate = `${y}-${m}-${d}`;
+          } else {
+            isoDate = humanDate;
+          }
+        }
+      }
+      startTime = resolvedData.start_time || null;
+      endTime = resolvedData.end_time || null;
+      venue = resolvedData.venue ? String(resolvedData.venue).trim() : null;
+      deadline = resolvedData.deadline ? String(resolvedData.deadline).trim() : null;
+      if (Array.isArray(resolvedData.required_actions) && resolvedData.required_actions.length > 0) {
+        deadlineAction = resolvedData.required_actions.join('; ');
+      } else if (resolvedData.required_action) {
+        deadlineAction = resolvedData.required_action;
+      }
+      if (resolvedData.urgency === 'high') urgency = 'high';
+      else if (resolvedData.urgency === 'medium') urgency = 'medium';
+      else urgency = 'normal';
+
+      const combined = `${resolvedData.title || ''} ${resolvedData.summary || ''}`.toLowerCase();
+      if (combined.includes('exam') || combined.includes('test')) category = 'Examination';
+      else if (combined.includes('lecture') || combined.includes('talk') || combined.includes('seminar')) category = 'Guest Lecture';
+      else if (combined.includes('holiday') || combined.includes('admin')) category = 'Administrative';
+      else category = 'Academic';
+    } else if (lower.includes('internal test') || lower.includes('csa') || lower.includes('assessment')) {
       title = title || 'Internal Test 2 (CSA)';
       startTime = '10:00';
       endTime = '11:30';
@@ -219,8 +416,15 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
   };
 
   // Publish Notice & Synchronize to Calendar & In-App Alerts
-  const handlePublish = () => {
+  const handlePublish = (overrideConflict = false) => {
     if (!extractedDraft) return;
+
+    if (conflictCheckResult?.has_conflict && !overrideConflict) {
+      setShowConflictOverrideConfirm(true);
+      return;
+    }
+
+    setShowConflictOverrideConfirm(false);
 
     const newNotice: OfficialNotice = {
       id: `notice-pub-${Date.now()}`,
@@ -265,6 +469,7 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
     setToastMessage(`Published official circular "${newNotice.title}" and broadcast to ${targetAudience}!`);
     setExtractedDraft(null);
     setUploadedFile(null);
+    setConflictCheckResult(null);
     setTimeout(() => {
       setToastMessage('');
       setActiveSection('circulars');
@@ -624,14 +829,171 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
                     </p>
                   </div>
 
+                  {/* Pre-scheduling Conflict Detection Alert */}
+                  {isCheckingConflict && (
+                    <div className="p-3 rounded-xl bg-[#F7F4E9] border border-[#E2DDD0] text-xs font-mono text-[#172B4D]/70 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-[#D9A928] animate-spin shrink-0" />
+                      <span>Checking student timetables & faculty commitments...</span>
+                    </div>
+                  )}
+
+                  {!isCheckingConflict && conflictCheckResult?.has_conflict && (
+                    <div className="p-3.5 rounded-xl bg-[#FFF0F0] border-2 border-[#D9574F]/40 space-y-2.5 animate-in fade-in">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-[#D9574F] shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-mono text-xs font-bold text-[#D9574F] uppercase tracking-wide block">
+                            Scheduling Conflict Detected ({conflictCheckResult.conflict_count})
+                          </span>
+                          <p className="text-[11px] text-[#172B4D]/80 leading-snug">
+                            Proposed lecture clashes with existing saved commitments for {targetAudience}.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Conflicting Commitments Details */}
+                      <div className="space-y-1.5">
+                        {conflictCheckResult.conflicts.map((c, i) => (
+                          <div key={i} className="p-2 rounded-lg bg-[#FFFDF7] border border-[#FCA5A5] text-[11px] font-mono space-y-0.5">
+                            <div className="flex items-center justify-between font-bold text-[#172B4D]">
+                              <span className="truncate">{c.title}</span>
+                              <span className="text-[#D9574F] bg-[#FFF0F0] px-1.5 py-0.5 rounded text-[10px]">
+                                {c.overlapMinutes}m overlap
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-[#172B4D]/70 flex flex-wrap gap-x-2">
+                              <span>Overlap: <strong>{c.overlapStart} – {c.overlapEnd}</strong></span>
+                              <span>Organizer: <strong>{c.organizer}</strong></span>
+                              <span>Cohort: <strong>{c.targetAudience}</strong></span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Dynamic Alternative Free Slots from Database */}
+                      {conflictCheckResult.suggested_slots && conflictCheckResult.suggested_slots.length > 0 && (
+                        <div className="pt-2 border-t border-[#FCA5A5]/60 space-y-1.5">
+                          <span className="text-[10px] font-mono font-bold text-[#172B4D] block uppercase tracking-wider">
+                            Available Conflict-Free Slots (Database Calculated):
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {conflictCheckResult.suggested_slots.map((slot, sIdx) => (
+                              <button
+                                key={sIdx}
+                                type="button"
+                                onClick={() => {
+                                  if (extractedDraft) {
+                                    setExtractedDraft({
+                                      ...extractedDraft,
+                                      startTime: slot.startTime,
+                                      endTime: slot.endTime
+                                    });
+                                  }
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-[#FFFDF7] hover:bg-[#F0FDF4] border border-[#86EFAC] text-[#15803D] text-[11px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                                title={`Apply ${slot.displayTime}`}
+                              >
+                                <CheckCircle2 className="w-3 h-3 text-[#15803D]" />
+                                <span>{slot.displayTime || `${slot.startTime} – ${slot.endTime}`}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!isCheckingConflict && conflictCheckResult && !conflictCheckResult.has_conflict && extractedDraft.startTime && extractedDraft.endTime && (
+                    <div className="p-2.5 rounded-xl bg-[#F0FDF4] border border-[#86EFAC] text-[11px] font-mono text-[#15803D] flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#15803D] shrink-0" />
+                      <span>Schedule verified: Zero clashes with student & faculty timetables for {targetAudience}.</span>
+                    </div>
+                  )}
+
                   <button
                     type="button"
-                    onClick={handlePublish}
+                    onClick={() => handlePublish(false)}
                     className="w-full py-3 rounded-xl bg-[#D9A928] hover:bg-[#B88C1A] text-[#172B4D] font-mono text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer"
                   >
                     <Send className="w-4 h-4" />
                     <span>Publish Official Circular to {targetAudience}</span>
                   </button>
+
+                  {/* Conflict Override Confirmation Modal */}
+                  {showConflictOverrideConfirm && conflictCheckResult && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
+                      <div className="w-full max-w-md bg-[#FFFDF7] border border-[#E2DDD0] rounded-2xl shadow-xl overflow-hidden p-6 space-y-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-[#FFF0F0] border border-[#FCA5A5] flex items-center justify-center text-[#D9574F] shrink-0">
+                            <AlertTriangle className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-serif font-bold text-base text-[#172B4D]">
+                              Active Schedule Conflict Warning
+                            </h3>
+                            <p className="text-xs font-mono text-[#172B4D]/70 mt-0.5">
+                              {conflictCheckResult.conflict_count} schedule clash detected with student commitments.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="bg-[#F7F4E9] p-3 rounded-xl border border-[#E2DDD0] text-xs font-mono space-y-1.5">
+                          {conflictCheckResult.conflicts.map((c, i) => (
+                            <div key={i} className="flex justify-between text-[#172B4D]">
+                              <span>{c.title} ({c.organizer})</span>
+                              <span className="text-[#D9574F] font-bold">{c.overlapMinutes}m clash</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {conflictCheckResult.suggested_slots && conflictCheckResult.suggested_slots.length > 0 && (
+                          <div className="space-y-1.5">
+                            <span className="text-xs font-mono font-bold text-[#172B4D]">
+                              Recommended Conflict-Free Slots:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {conflictCheckResult.suggested_slots.map((s, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => {
+                                    if (extractedDraft) {
+                                      setExtractedDraft({
+                                        ...extractedDraft,
+                                        startTime: s.startTime,
+                                        endTime: s.endTime
+                                      });
+                                    }
+                                    setShowConflictOverrideConfirm(false);
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-lg bg-[#F0FDF4] border border-[#86EFAC] text-[#15803D] text-xs font-mono font-bold hover:bg-[#DCFCE7] cursor-pointer"
+                                >
+                                  Apply {s.displayTime}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E2DDD0]">
+                          <button
+                            type="button"
+                            onClick={() => setShowConflictOverrideConfirm(false)}
+                            className="px-3 py-1.5 rounded-lg border border-[#E2DDD0] bg-[#FFFDF7] text-xs font-mono text-[#172B4D] hover:bg-[#F7F4E9] cursor-pointer"
+                          >
+                            Cancel & Adjust
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePublish(true)}
+                            className="px-3.5 py-1.5 rounded-lg bg-[#D9574F] text-white text-xs font-mono font-bold hover:bg-[#B83E37] cursor-pointer shadow-xs"
+                          >
+                            Publish Anyway
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="p-8 text-center text-xs font-mono text-[#172B4D]/50 space-y-2">
