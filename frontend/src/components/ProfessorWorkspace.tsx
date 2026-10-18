@@ -7,6 +7,7 @@ import { OfficialNotice, ConflictRequest, ExtractedNotice } from '../types';
 import { CalendarEvent } from './PersonalAcademicCalendar';
 import { NoticeProcessingSteps } from './NoticeProcessingSteps';
 import { useAuth } from '../context/AuthContext';
+import { API_ENDPOINTS } from '../config/api';
 
 interface ProfessorWorkspaceProps {
   officialNotices: OfficialNotice[];
@@ -105,7 +106,7 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
 
     setIsCheckingConflict(true);
     try {
-      const res = await fetch('/api/conflicts/check', {
+      const res = await fetch(API_ENDPOINTS.CHECK_CONFLICTS, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -209,7 +210,7 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
       formData.append('file', uploadedFile.file);
       if (trimmed) formData.append('text', trimmed);
 
-      const promise = fetch('http://localhost:5000/api/notices/decode-file', {
+      const promise = fetch(API_ENDPOINTS.DECODE_NOTICE_FILE, {
         method: 'POST',
         body: formData
       })
@@ -227,7 +228,7 @@ export const ProfessorWorkspace: React.FC<ProfessorWorkspaceProps> = ({
         .catch(() => ({ ok: false, error: '' }));
       parsePromiseRef.current = promise;
     } else if (trimmed) {
-      const promise = fetch('http://localhost:5000/api/notices/decode', {
+      const promise = fetch(API_ENDPOINTS.DECODE_NOTICE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: trimmed })

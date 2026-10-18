@@ -3,6 +3,7 @@ import { X, Sparkles, AlertTriangle, Calendar, Clock, MapPin, Download, CheckCir
 import { ExtractedNotice } from '../types';
 import { downloadNoticeIcs } from '../utils/icsExport';
 import { ParticlePreloader } from './ParticlePreloader';
+import { API_ENDPOINTS } from '../config/api';
 
 interface InteractiveDecodeModalProps {
   isOpen: boolean;
@@ -34,7 +35,7 @@ export const InteractiveDecodeModal: React.FC<InteractiveDecodeModalProps> = ({ 
     setDecodeError('');
     setIsDecoding(true);
     try {
-      const response = await fetch('http://localhost:5000/api/notices/decode', {
+      const response = await fetch(API_ENDPOINTS.DECODE_NOTICE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { downloadNoticeIcs } from '../utils/icsExport';
 import { ExtractedNotice, OfficialNotice, ConflictRequest, AppNotification } from '../types';
+import { API_ENDPOINTS } from '../config/api';
 
 interface PersonalDeadline {
   id: string;
@@ -209,7 +210,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
     if (!token) return;
 
     // Fetch real persisted events from backend
-    fetch('/api/events', {
+    fetch(API_ENDPOINTS.EVENTS, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -240,7 +241,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
       .catch(() => {});
 
     // Fetch real conflict requests from backend
-    fetch('/api/conflicts', {
+    fetch(API_ENDPOINTS.CONFLICTS, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -391,7 +392,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
           formData.append('text', trimmed);
         }
 
-        fetchPromise = fetch('http://localhost:5000/api/notices/decode-file', {
+        fetchPromise = fetch(API_ENDPOINTS.DECODE_NOTICE_FILE, {
           method: 'POST',
           body: formData
         })
@@ -411,7 +412,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
           });
       } else if (trimmed) {
         // Send text via JSON to text decoding API
-        fetchPromise = fetch('http://localhost:5000/api/notices/decode', {
+        fetchPromise = fetch(API_ENDPOINTS.DECODE_NOTICE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: trimmed })
@@ -898,7 +899,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
 
     // Persist to backend database
     if (token) {
-      fetch('/api/conflicts', {
+      fetch(API_ENDPOINTS.CONFLICTS, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -934,7 +935,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
 
       // Persist official event to backend database
       if (token) {
-        fetch('/api/events', {
+        fetch(API_ENDPOINTS.EVENTS, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1019,7 +1020,7 @@ export const ProtectedWorkspace: React.FC<ProtectedWorkspaceProps> = ({
 
     // Persist resolution to backend database
     if (token) {
-      fetch(`/api/conflicts/${conflictId}/review`, {
+      fetch(API_ENDPOINTS.REVIEW_CONFLICT(conflictId), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
